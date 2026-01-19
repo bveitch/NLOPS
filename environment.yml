@@ -1,0 +1,11 @@
+name: nlops
+channels:
+ - defaults
+ - conda-forge
+dependencies:
+ - python
+ - numpy
+ - scipy
+ - scikit-image
+ - matplotlib
+ - jupyter
