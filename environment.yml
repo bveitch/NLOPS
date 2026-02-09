@@ -4,8 +4,12 @@ channels:
  - conda-forge
 dependencies:
  - python
- - numpy
- - scipy
- - scikit-image
- - matplotlib
- - jupyter
+ - pip
+ - pip:
+    - numpy
+    - scipy
+    - sympy
+    - scikit-image
+    - matplotlib
+    - jupyter
+    - ruff
