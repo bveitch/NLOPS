@@ -2,13 +2,13 @@ from abc import ABC, abstractmethod
 import math
 import numpy as np
 import numpy.typing as npt
-from src.NLBase import NLBase
+from src.operators.NLBase import NLBase
 
 class ObjectiveFn(ABC):
 
     def __init__(self, shape:tuple):
         self._shape = shape
-
+    
     @property
     def xshape(self) ->tuple:
         return self._shape
@@ -77,31 +77,3 @@ class L2ObjectiveFn(ObjectiveFn):
             return self.op.adjoint(x, r)
         else:
             return r
-    
-class SumObjectiveFn(ObjectiveFn):
-
-    def __init__(self, 
-                 objfns: list[ObjectiveFn], 
-                 regularizers:list[np.float64]):
-        assert len(objfns) == len(regularizers), "must be one regularizer for each objfn"
-        shape = objfns[0].xshape
-        nobjfns =len(objfns)
-        if nobjfns > 1: 
-            for objfn in objfns[1:]:
-                assert objfn.xshape == shape, "objective function must have same x shape"
-        super().__init__(shape)
-        self.objfns = zip(objfns, regularizers)
-
-    def _value(self, x):
-        v = np.float64(0)
-        for  objfn, reg in self.objfns:
-            v = v + reg*objfn._value(x)
-        return v
-
-    def _gradient(self, x):
-        g = np.zeros(x.shape, dtype=x.dtype)
-        for  objfn, reg in self.objfns:
-            g = g + reg*objfn._gradient(x)
-        return g
-
-
