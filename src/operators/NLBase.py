@@ -1,14 +1,23 @@
-import copy
+
+from __future__ import annotations
 from abc import ABC, abstractmethod
 import numpy as np
 import numpy.typing as npt
 
 class NLBase(ABC):
 
-    def __init__(self, input_shape:tuple, output_shape:tuple):
+    def __init__(self, input_shape:tuple, output_shape:tuple, name:str = "NLBase"):
         self._input_shape = input_shape
         self._output_shape = output_shape
+        self._name = name
 
+    def __str__(self):
+        return f"{self._name}: {self._input_shape} -> {self._output_shape}"
+
+    @property
+    def name(self):
+        return self._name
+    
     @property
     def input_shape(self):
         return self._input_shape
@@ -16,7 +25,7 @@ class NLBase(ABC):
     @property
     def output_shape(self):
         return self._input_shape
-
+    
     @abstractmethod
     def _check_shape(self, shape:tuple, is_fwd:bool):
         return NotImplemented
@@ -49,9 +58,8 @@ class NLBase(ABC):
 
 class LBase(NLBase):
 
-    def __init__(self, input_shape:tuple, output_shape:tuple):
-        self._input_shape = input_shape
-        self._output_shape = output_shape
+    def __init__(self, input_shape:tuple, output_shape:tuple, name:str = "LBase"):
+        super().__init__(input_shape, output_shape, name)
     
     @abstractmethod
     def _fwd(self, input:npt.NDArray) ->npt.NDArray:
@@ -77,49 +85,7 @@ class LBase(NLBase):
     def adj(self, inputT:npt.NDArray)->npt.NDArray:
         self._check_shape(inputT.shape, False)
         return self._adj(inputT) 
-    
-class NLChain(NLBase):
-
-    def __init__(self, 
-                 input_shape: tuple, 
-                 output_shape: tuple, 
-                 nl_operators: list[NLBase]):
-        super().__init__(input_shape, output_shape)
-        self.operators = nl_operators
-
-    def _check_shape(self, shape:tuple, is_fwd:bool):
-        if is_fwd:
-            assert shape == self._input_shape, f"NLChain: {shape=} != {self._input_shape}"
-        else:
-            assert shape == self._output_shape, f"NLChain: {shape=} != {self._output_shape}"
-
-    def _fwd_nl(self, input:npt.NDArray) ->npt.NDArray:
-        output=input.copy()
-        for operator in self.operators:
-            output=operator(output)
-        return output
-    
-    def _fwd_lin(self, input:npt.NDArray, dinput:npt.NDArray) ->npt.NDArray:
-        output = input.copy()
-        doutput = dinput.copy()
-        for operator in self.operators:
-            doutput=operator.linear(output, doutput)
-            output=operator(output)
-        return doutput
-    
-    def _adj_lin(self, input:npt.NDArray, dinputT:npt.NDArray) ->npt.NDArray:
-        dtemp = dinputT.copy()
-        ops = copy.copy(self.operators)
-        while len(ops) > 0:
-            op = ops.pop()
-            if len(ops) > 0:
-                output_shape = op.input_shape
-                chainop= NLChain(input_shape = self._input_shape,
-                                 output_shape = output_shape,
-                                 nl_operators=ops)
-                temp = chainop(input)
-            dtemp = op.adjoint(temp,dtemp)
-        return dtemp
+ 
         
 def check_dot_product(operator: NLBase, input:npt.NDArray):
     x=input.random()

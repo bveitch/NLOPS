@@ -1,6 +1,6 @@
 # Installation
 ```
-conda env create - environment.yml
+conda env create -f environment.yml
 ```
 
 ```
