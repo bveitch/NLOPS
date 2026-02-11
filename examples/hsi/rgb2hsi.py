@@ -2,8 +2,8 @@ import numpy as np
 import numpy.typing as npt
 import matplotlib.pyplot as plt
 from hsi2rgb import HSIToRGB
-from src.operators.NLChain import NLChain
-from src.operators.Constraints import Sigmoid
+from src.operators import NLChain
+from src.operators import Constraints 
 from src.objectives.ObjectiveFn import L2ObjectiveFn
 from src.objectives.SumObjectiveFn import SumObjectiveFn
 from src.solvers.Solve import GeneralSolver
@@ -40,7 +40,7 @@ def hsi_objfn(rgb_raw: npt.NDArray,
         constraint = None
         operator = hsi2rgb
     else:
-        constraint = Sigmoid(shape = hsi_shape, min=0.0, max=1.25)
+        constraint = Constraints.Sigmoid(shape = hsi_shape, min=0.0, max=1.25)
         operator = NLChain([constraint, hsi2rgb])
     if hsi_constraint:
         robjfn = L2ObjectiveFn(hsi_shape)
