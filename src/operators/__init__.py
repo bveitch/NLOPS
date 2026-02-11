@@ -1,1 +1,1 @@
-__all__ = ['NLBase', 'MatrixOperator','NLChain','Sigmoid','SympyWrapper']
+__all__ = ['MatrixOperator','NLChain','Constraints','SympyWrapper']
