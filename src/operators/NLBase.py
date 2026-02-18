@@ -24,7 +24,7 @@ class NLBase(ABC):
     
     @property
     def output_shape(self):
-        return self._input_shape
+        return self._output_shape
     
     @abstractmethod
     def _check_shape(self, shape:tuple, is_fwd:bool):
@@ -88,8 +88,10 @@ class LBase(NLBase):
  
         
 def check_dot_product(operator: NLBase, input:npt.NDArray):
-    x=input.random()
-    y=operator(input).random()
+    input_shape = operator.input_shape
+    output_shape = operator.output_shape
+    x = np.random.random(input_shape)
+    y = np.random.random(output_shape)
     yTAx=y.dot(operator.linear(input, x))
     xTATy=x.dot(operator.adjoint(input, y))
     np.testing.assert_allclose(yTAx, xTATy)
