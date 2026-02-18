@@ -97,9 +97,10 @@ def check_dot_product(operator: NLBase, input:npt.NDArray):
     np.testing.assert_allclose(yTAx, xTATy)
 
 def check_linearization(operator: NLBase, input:npt.NDArray, eps=1.0e-6):
-    dx=input.random()
+    input_shape = operator.input_shape
+    dx = np.random.random(input_shape)
     fpx=operator(input+eps*dx)
     fmx=operator(input-eps*dx)
     df = (fpx-fmx)*(0.5/eps)
     Fmx=operator.linear(input,dx)
-    np.assert_close(df, Fmx, atol=1.0e-6, rtol=eps*eps*dx.dot(dx))
+    np.testing.assert_allclose(df, Fmx, atol=1.0e-6, rtol=eps*eps*dx.dot(dx))
