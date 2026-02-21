@@ -1,6 +1,6 @@
 import copy
 import numpy.typing as npt
-from src.operators.NLBase import NLBase
+from src.operators.base import NLBase
 
 class NLChain(NLBase):
 
@@ -39,9 +39,9 @@ class NLChain(NLBase):
     
     def _check_shape(self, shape:tuple, is_fwd:bool):
         if is_fwd:
-            assert shape == self._input_shape, f"{self.name}: {shape=} != {self._input_shape}"
+            assert shape == self._input_shape, f"{self.name}: {shape=} != {self.input_shape}"
         else:
-            assert shape == self._output_shape, f"{self.name}: {shape=} != {self._output_shape}"
+            assert shape == self._output_shape, f"{self.name}: {shape=} != {self.output_shape}"
 
     def _fwd_nl(self, input:npt.NDArray) ->npt.NDArray:
         output=input.copy()
@@ -63,10 +63,9 @@ class NLChain(NLBase):
         while len(ops) > 0:
             op = ops.pop()
             if len(ops) > 0:
-                output_shape = op.input_shape
-                chainop= NLChain(input_shape = self._input_shape,
-                                 output_shape = output_shape,
-                                 nl_operators=ops)
+                chainop= NLChain(nl_operators=ops)
                 temp = chainop(input)
+            else:
+                temp = input
             dtemp = op.adjoint(temp,dtemp)
         return dtemp

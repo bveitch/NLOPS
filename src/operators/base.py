@@ -20,11 +20,15 @@ class NLBase(ABC):
     
     @property
     def input_shape(self):
+        if isinstance(self._input_shape, int):
+            return tuple([self._input_shape])
         return self._input_shape
     
     @property
     def output_shape(self):
-        return self._input_shape
+        if isinstance(self._output_shape, int):
+            return tuple([self._output_shape])
+        return self._output_shape
     
     @abstractmethod
     def _check_shape(self, shape:tuple, is_fwd:bool):
@@ -88,16 +92,19 @@ class LBase(NLBase):
  
         
 def check_dot_product(operator: NLBase, input:npt.NDArray):
-    x=input.random()
-    y=operator(input).random()
+    input_shape = operator.input_shape
+    output_shape = operator.output_shape
+    x = np.random.random(input_shape)
+    y = np.random.random(output_shape)
     yTAx=y.dot(operator.linear(input, x))
     xTATy=x.dot(operator.adjoint(input, y))
     np.testing.assert_allclose(yTAx, xTATy)
 
 def check_linearization(operator: NLBase, input:npt.NDArray, eps=1.0e-6):
-    dx=input.random()
+    input_shape = operator.input_shape
+    dx = np.random.random(input_shape)
     fpx=operator(input+eps*dx)
     fmx=operator(input-eps*dx)
     df = (fpx-fmx)*(0.5/eps)
     Fmx=operator.linear(input,dx)
-    np.assert_close(df, Fmx, atol=1.0e-6, rtol=eps*eps*dx.dot(dx))
+    np.testing.assert_allclose(df, Fmx, atol=1.0e-6, rtol=eps*eps*dx.dot(dx))

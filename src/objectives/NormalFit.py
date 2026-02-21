@@ -1,7 +1,7 @@
 import numpy as np
-from src.objectives import ObjectiveFn
+from src.objectives import base
 
-class NormalFit(ObjectiveFn):
+class NormalFit(base):
 
     def __init__(self, data, predictor):
         self.data = data

@@ -1,6 +1,6 @@
 import numpy as np
 import numpy.typing as npt
-from src.operators.NLBase import LBase
+from src.operators.base import LBase
 
 class MatrixOperator(LBase):
     
@@ -13,9 +13,9 @@ class MatrixOperator(LBase):
     def _check_shape(self, input_shape, is_fwd):
         size = input_shape[-1]
         if is_fwd:
-            assert size == self._input_shape, f"{input_shape=}[-1] != {self._input_shape}"
+            assert size == self._input_shape, f"{self.name}: {input_shape=}[-1] != {self._input_shape}"
         else:
-            assert size == self._output_shape, f"{input_shape=}[-1] != {self._output_shape}"
+            assert size == self._output_shape, f"{self.name}: {input_shape=}[-1] != {self._output_shape}"
 
     def _fwd(self, hsi):
         return np.dot(hsi, self._M.T)
