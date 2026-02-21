@@ -85,7 +85,5 @@ def check_objective(objective: ObjectiveFn, x:npt.NDArray, eps=1.0e-6):
     fmx=objective(x-eps*dx)
     df = (fpx-fmx)*(0.5/eps)
     gx=objective.gradient(x)
-    print(f"{np.max(gx)=}")
-    print(f"{np.min(gx)=}")
     dfdx = np.dot(gx.ravel(), dx.ravel())
     np.testing.assert_allclose(df, dfdx, atol=1.0e-6, rtol=eps*eps*dx.dot(dx))
