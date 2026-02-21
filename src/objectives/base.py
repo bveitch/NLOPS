@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import math
 import numpy as np
 import numpy.typing as npt
-from src.operators.NLBase import NLBase
+from src.operators.base import NLBase
 
 class ObjectiveFn(ABC):
 
@@ -47,6 +47,7 @@ class L2ObjectiveFn(ObjectiveFn):
                  data: npt.NDArray | None = None):
         self.op = operator
         self.d = data
+        print(f"{shape=}")
         super().__init__(shape)
 
     @property
@@ -77,3 +78,14 @@ class L2ObjectiveFn(ObjectiveFn):
             return self.op.adjoint(x, r)
         else:
             return r
+
+def check_objective(objective: ObjectiveFn, x:npt.NDArray, eps=1.0e-6):
+    dx = np.random.random(x.shape)
+    fpx=objective(x+eps*dx)
+    fmx=objective(x-eps*dx)
+    df = (fpx-fmx)*(0.5/eps)
+    gx=objective.gradient(x)
+    print(f"{np.max(gx)=}")
+    print(f"{np.min(gx)=}")
+    dfdx = np.dot(gx.ravel(), dx.ravel())
+    np.testing.assert_allclose(df, dfdx, atol=1.0e-6, rtol=eps*eps*dx.dot(dx))

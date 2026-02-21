@@ -20,10 +20,14 @@ class NLBase(ABC):
     
     @property
     def input_shape(self):
+        if isinstance(self._input_shape, int):
+            return tuple([self._input_shape])
         return self._input_shape
     
     @property
     def output_shape(self):
+        if isinstance(self._output_shape, int):
+            return tuple([self._output_shape])
         return self._output_shape
     
     @abstractmethod

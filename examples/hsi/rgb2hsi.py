@@ -2,10 +2,10 @@ import numpy as np
 import numpy.typing as npt
 import matplotlib.pyplot as plt
 from hsi2rgb import HSIToRGB
-from src.operators import NLChain
-from src.operators import Constraints 
-from src.objectives.ObjectiveFn import L2ObjectiveFn
-from src.objectives.SumObjectiveFn import SumObjectiveFn
+from src.operators import chain
+from src.operators import constraints 
+from src.objectives.base import L2ObjectiveFn
+from src.objectives.sum_objective import SumObjectiveFn
 from src.solvers.Solve import GeneralSolver
 
 def plot_rgb_filters():
@@ -40,8 +40,8 @@ def hsi_objfn(rgb_raw: npt.NDArray,
         constraint = None
         operator = hsi2rgb
     else:
-        constraint = Constraints.Sigmoid(shape = hsi_shape, min=0.0, max=1.25)
-        operator = NLChain([constraint, hsi2rgb])
+        constraint = constraints.Sigmoid(shape = hsi_shape, min=0.0, max=1.25)
+        operator = chain([constraint, hsi2rgb])
     if hsi_constraint:
         robjfn = L2ObjectiveFn(hsi_shape)
     dobjfn = L2ObjectiveFn(hsi_shape, operator = operator, data = data)

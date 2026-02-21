@@ -1,6 +1,6 @@
 import numpy as np
 import numpy.typing as npt
-from src.operators.MatrixOperator import MatrixOperator
+from src.operators.matrix import MatrixOperator
 
 WMIN = 380
 WMAX = 720

@@ -1,6 +1,6 @@
 import numpy as np
 import numpy.typing as npt
-from src.operators.NLBase import NLBase
+from src.operators.base import NLBase
 
 class Sigmoid(NLBase):
 
