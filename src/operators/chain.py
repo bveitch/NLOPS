@@ -39,9 +39,9 @@ class NLChain(NLBase):
     
     def _check_shape(self, shape:tuple, is_fwd:bool):
         if is_fwd:
-            assert shape == self._input_shape, f"{self.name}: {shape=} != {self.input_shape}"
+            assert shape == self.input_shape, f"{self.name}: {shape=} != {self.input_shape}"
         else:
-            assert shape == self._output_shape, f"{self.name}: {shape=} != {self.output_shape}"
+            assert shape == self.output_shape, f"{self.name}: {shape=} != {self.output_shape}"
 
     def _fwd_nl(self, input:npt.NDArray) ->npt.NDArray:
         output=input.copy()
