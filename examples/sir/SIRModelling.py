@@ -177,8 +177,9 @@ class SIRModel(NLBase):
                 #SIRSampler.df_adj(jt, data, (tp0, fp0, sir0), (dtp, dfp, dsir))
         return self.pack_params(dsir, dmod, dtp, dfp)
   
-def sample(pinfectives, tp, fp, nsamples):
+def sample(pinfectives, tp, fp, nsamples, seed =1000):
+    rng = np.random.default_rng(seed=seed)
     nt = pinfectives.shape[0]
     p = tp * pinfectives + (1-pinfectives) * fp
-    true_samples  = np.random.binomial(nsamples, p, size=nt)
+    true_samples  = rng.binomial(nsamples, p, size=nt)
     return true_samples
