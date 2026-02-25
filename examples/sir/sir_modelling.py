@@ -1,49 +1,7 @@
 import numpy as np
 import numpy.typing as npt
 from src.operators.base import NLBase
-from src.operators.sympy_wrapper import SympyWrap
-
-class SIRUpdate:
-
-    exprs =  ["-a*s*i", "a*s*i-b*i", "b*i"]
-    vars = ["s", "i"]
-    baseop = SympyWrap.from_strings(exprs)
- 
-    def __init__(self, a, b): 
-        self._fsir = SIRUpdate.baseop.partial_eval({"a":a, "b":b})
-        self._jac_sir = self._fsir.jac(SIRUpdate.vars)
-        self._jac_mod, _ = SIRUpdate.baseop.partial_jac({"a":a, "b":b})
-
-    @classmethod
-    def input_size(cls):
-        return len(cls.vars)
-    
-    @classmethod
-    def output_size(cls):
-        return len(cls.exprs)
-    
-    @staticmethod
-    def mod_size():
-        return 2
-
-    def f(self, sir0):
-        return self._fsir(sir0, SIRUpdate.vars)
-        
-    def df_dsir(self, sir0, dsir):
-        jac = self._jac_sir(sir0, SIRUpdate.vars)
-        return np.dot(jac, dsir)
-
-    def df_dmod(self, sir0, dmod):
-        jac = self._jac_mod(sir0, SIRUpdate.vars)
-        return np.dot(jac, dmod)
-
-    def dsir_df(self, sir0, df):
-        jac = self._jac_sir(sir0, SIRUpdate.vars)
-        return np.dot(jac.T, df)
-
-    def dmod_df(self, sir0, df):
-        jac = self._jac_mod(sir0, SIRUpdate.vars)
-        return np.dot(jac.T, df)
+from examples.sir.sir_update import SIRUpdate
 
 class SIRSampler:
 
@@ -73,17 +31,18 @@ class SIRSampler:
 
 class SIRModel(NLBase):
 
-    def __init__(self, T: float, dt: float, Tsub: float):
+    def __init__(self, T: float, dt: float, Tsub: float, sample=False):
         self._T = T
         self._dt = dt
         self._nt = int(T/dt)
         self._ntsub = int(T/Tsub)
         self._jtsub = int(Tsub/dt)
-        self._sir_shape = SIRUpdate.input_size()
-        self._mod_shape = SIRUpdate.mod_size()
+        self._sir_size = SIRUpdate.sir_size()
+        self._mod_size = SIRUpdate.mod_size()
         self._num_pvalues = 2
-        self._dsize = SIRUpdate.output_size()
-        super().__init__(input_shape =  (self._sir_shape+ self._mod_shape + self._num_pvalues), 
+        self._dsize = self._sir_size
+        self._sample = sample
+        super().__init__(input_shape =  (self._sir_size - 1 + self._mod_size + self._num_pvalues), 
                          output_shape = (self._ntsub,self._dsize),
                          name = "SIRMod")
     
@@ -135,9 +94,12 @@ class SIRModel(NLBase):
         for it in range(self._nt):
             if(it % self._jtsub==0):
                 jt=int(it/self._jtsub)
-                #SIRSampler.f(jt=jt, data = data, params = (tp, fp, sir0))
-                data[jt,:] = sir0
-            sir0 += self._dt*updater.f(sir0[0:2])
+                if not self._sample:
+                    #SIRSampler.f(jt=jt, data = data, params = (tp, fp, sir0))
+                    data[jt,:] = sir0
+                else:
+                    data[jt,:] = SIRSampler.f(params = (tp, fp, sir0))
+            sir0 += self._dt*updater.f(sir0)
         return data
     
     def _fwd_lin(self, params:npt.NDArray, dparams:npt.NDArray) ->npt.NDArray:
@@ -146,36 +108,44 @@ class SIRModel(NLBase):
         data = np.zeros(self.output_shape)
         updater = SIRUpdate(*mod0)
         for it in range(self._nt):
-            if((it % self.ntsub)==0):
+            if(it % self._jtsub==0):
                 jt=int(it/self._jtsub)
-                #SIRSampler.df_lin(jt, data, (tp0, fp0, sir0), (dtp, dfp, dsir))
-                data[jt,:] = dsir
+                if not self._sample:
+                    data[jt,:] = dsir
+                else:
+                    data[jt,:] = SIRSampler.df_lin(params = (tp0, fp0, sir0), dparams=(dtp, dfp, dsir))
             dsir += self._dt*updater.df_dsir(sir0,dsir)
             dsir += self._dt*updater.df_dmod(sir0,dmod)
-            sir0 += self._dt*updater(sir0)
+            sir0 += self._dt*updater.f(sir0)
         return data
     
     def _adj_lin(self, params:npt.NDArray, data:npt.NDArray) ->npt.NDArray:
         sir0, mod0, tp0, fp0 = self.unpack_params(params, True)
         updater = SIRUpdate(*mod0)
-        sirdata = np.zeros((self.nt,self.dsize))
+        sirdata = np.zeros((self.nt,self._dsize))
         for it in range(self.nt):
             sirdata[it,:]= sir0
-            sir0 += self._dt*updater.f(sir0)
+            sir0 += self._dt*updater.f(sir0[0:2])
 
         dtp = 0
         dfp = 0
-        dmod = np.zeros(self._nmod)
-        dsir = np.zeros(self.dsize)
+        dmod = np.zeros(self._mod_size)
+        dsir = np.zeros(self._dsize)
         for it in reversed(range(self._nt)):
             sir0 = sirdata[it,:]
             dmod += self.dt*updater.dmod_df( sir0 ,dsir)
             dsir += self.dt*updater.dsir_df( sir0, dsir)
-            if(it% self.ntsub==0):
+            if(it % self._jtsub==0):
                 jt=int(it/self._jtsub)
-                dsir += data[jt,:]
+                if not self._sample:
+                    dsir += data[jt,:]
+                else:
+                    dparams = SIRSampler.df_adj(params=(tp0, fp0, sir0), data = data)
+                    dtp += dparams[0]
+                    dfp += dparams[1]
+                    dsir += dparams[2]
                 #SIRSampler.df_adj(jt, data, (tp0, fp0, sir0), (dtp, dfp, dsir))
-        return self.pack_params(dsir, dmod, dtp, dfp)
+        return self.pack_params((dsir, dmod, dtp, dfp))
   
 def sample(pinfectives, tp, fp, nsamples, seed =1000):
     rng = np.random.default_rng(seed=seed)
