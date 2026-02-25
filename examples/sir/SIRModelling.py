@@ -7,12 +7,12 @@ class SIRUpdate:
 
     exprs =  ["-a*s*i", "a*s*i-b*i", "b*i"]
     vars = ["s", "i"]
+    baseop = SympyWrap.from_strings(exprs)
  
     def __init__(self, a, b): 
-        baseop = SympyWrap.from_strings(SIRUpdate.exprs)
-        self._fsir = baseop.partial_eval({"a":a, "b":b})
+        self._fsir = SIRUpdate.baseop.partial_eval({"a":a, "b":b})
         self._jac_sir = self._fsir.jac(SIRUpdate.vars)
-        self._jac_mod, _ = baseop.partial_jac({"a":a, "b":b})
+        self._jac_mod, _ = SIRUpdate.baseop.partial_jac({"a":a, "b":b})
 
     @classmethod
     def input_size(cls):
@@ -48,36 +48,28 @@ class SIRUpdate:
 class SIRSampler:
 
     @staticmethod
-    def f(jt: int, data:npt.NDArray, params, sample_i = False):
+    def f(params):
         (tp, fp, sir) = params
-        if not sample_i:
-            data[jt, :] = sir
-        else:
-            i =sir[1]
-            data[jt] = (tp + fp)*i
+        i =sir[1]
+        return (tp + fp)*i
 
     @staticmethod
-    def df_lin(jt: int, data:npt.NDArray, params0, dparams, sample_i=False):
+    def df_lin(params0, dparams):
         (tp0, fp0, sir0) = params0
         (dtp, dfp, dsir) = dparams
-        if not sample_i:
-            data[jt, ...] = dsir
-        else:
-            i0 = sir0[1]
-            di = dsir[1]
-            data[jt] = dtp*i0 + dfp*(1-i0) + (tp0-fp0)*di
+        i0 = sir0[1]
+        di = dsir[1]
+        return dtp*i0 + dfp*(1-i0) + (tp0-fp0)*di
 
     @staticmethod
-    def df_adj(jt: int, data:npt.NDArray, params0, dparams, sample_i=False):
+    def df_adj(params0, data):
         (tp0, fp0, sir0) = params0
-        (dtp, dfp, dsir) = dparams
-        if not sample_i:
-            dsir += data[jt, ...]
-        else:
-            i0 = sir0[1]
-            dtp += i0*data[jt]
-            dfp += (1-i0)*data[jt]
-            dsir[1] += (tp0-fp0)*data[jt]
+        i0 = sir0[1]
+        dtp = i0*data
+        dfp = (1-i0)*data
+        dsir = np.zeros(sir0.shape)
+        dsir[1] = (tp0-fp0)*data
+        return (dtp, dfp, dsir)
 
 class SIRModel(NLBase):
 
@@ -155,8 +147,9 @@ class SIRModel(NLBase):
         updater = SIRUpdate(*mod0)
         for it in range(self._nt):
             if((it % self.ntsub)==0):
-                jt=int(it/self.ntsub)
-                SIRSampler.df_lin(jt, data, (tp0, fp0, sir0), (dtp, dfp, dsir))
+                jt=int(it/self._jtsub)
+                #SIRSampler.df_lin(jt, data, (tp0, fp0, sir0), (dtp, dfp, dsir))
+                data[jt,:] = dsir
             dsir += self._dt*updater.df_dsir(sir0,dsir)
             dsir += self._dt*updater.df_dmod(sir0,dmod)
             sir0 += self._dt*updater(sir0)
@@ -179,16 +172,13 @@ class SIRModel(NLBase):
             dmod += self.dt*updater.dmod_df( sir0 ,dsir)
             dsir += self.dt*updater.dsir_df( sir0, dsir)
             if(it% self.ntsub==0):
-                jt=int(it/self.ntsub)
-                #dsir += data[jt,:]
-                SIRSampler.df_adj(jt, data, (tp0, fp0, sir0), (dtp, dfp, dsir))
+                jt=int(it/self._jtsub)
+                dsir += data[jt,:]
+                #SIRSampler.df_adj(jt, data, (tp0, fp0, sir0), (dtp, dfp, dsir))
         return self.pack_params(dsir, dmod, dtp, dfp)
   
 def sample(pinfectives, tp, fp, nsamples):
     nt = pinfectives.shape[0]
-    size = (nsamples,nt)
-    true_samples  = np.random.binomial(nsamples, pinfectives, size=size)
-    true_p_samples = np.random.binomial(nsamples, tp, size=size)
-    false_p_samples = np.random.binomial(nsamples, fp, size=size)
-    p_samples = np.where(true_samples, true_p_samples, false_p_samples)  
-    return np.sum(p_samples, axis=0, keepdims=False)
+    p = tp * pinfectives + (1-pinfectives) * fp
+    true_samples  = np.random.binomial(nsamples, p, size=nt)
+    return true_samples
