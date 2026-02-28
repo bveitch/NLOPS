@@ -31,12 +31,17 @@ class SIRSampler:
 
 class SIRModel(NLBase):
 
-    def __init__(self, T: float, dt: float, Tsub: float, sample_i=False):
-        self._T = T
+    def __init__(self, T0: float, T1: float, dt: float, Tsub: float, units = "days", sample_i=False):
+        self._T0 = T0
+        self._T1 = T1
+        T = T1-T0
         self._dt = dt
         self._nt = int(T/dt)
         self._ntsub = int(T/Tsub)
         self._jtsub = int(Tsub/dt)
+        # T = jtsub * ntsub * dt
+        # ntsub = nt/jtsub = (T/Tsub)
+        self._units = units
         self._sir_size = SIRUpdate.sir_size()
         self._mod_size = SIRUpdate.mod_size()
         self._sample_i = sample_i
@@ -50,6 +55,23 @@ class SIRModel(NLBase):
                          output_shape = (self._ntsub,self._dsize),
                          name = "SIRMod")
     
+    @classmethod
+    def from_tvalues(cls, tvalues, dt, sample_i = False):
+        T0 = tvalues[0]
+        T1 = tvalues[-1]
+        ntsub = len(tvalues)
+        Tsub = (T1 - T0)/ntsub
+        units = tvalues.dtype.metadata["units"]
+        return cls(T0=T0, T1=T1, dt=dt, Tsub = Tsub, units = units, sample_i = sample_i)
+
+    def create_sampler(self):
+        return self.__init__(T0=self._T0, 
+                             T1=self._T1, 
+                             dt=self.dt, 
+                             Tsub=self._Tsub, 
+                             units=self._units, 
+                             sample_i=True)
+    
     @property
     def dt(self) -> int:
         return self._dt
@@ -60,15 +82,8 @@ class SIRModel(NLBase):
     
     @property
     def tvalues(self) -> int:
-        return np.linspace(0, self._T, num = self._ntsub)
-    
-    @classmethod
-    def nparams(cls):
-        return cls._nparams
-    
-    @classmethod
-    def nsir(cls):
-        return cls._nsir
+        dtype = np.dtype(float, metadata={"units": self._units})
+        return np.linspace(self._T0, self._T1, num = self._ntsub, dtype=dtype)
     
     def unpack_params(self, params, withN=False):
         if self._sample_i:
@@ -115,7 +130,7 @@ class SIRModel(NLBase):
                     data[jt,:] = sir0
             sir0 += self._dt*updater.f(sir0)
             if np.isnan(sir0).any():
-                self._catch_nan(it, data)
+                #self._catch_nan(it, data)
                 return data
         return data
     
@@ -136,22 +151,25 @@ class SIRModel(NLBase):
             dsir += self._dt*updater.df_dmod(sir0,dmod)
             sir0 += self._dt*updater.f(sir0)
             if np.isnan(sir0).any():
-                self._catch_nan(it, data)
+                #self._catch_nan(it, data)
                 return data
         return data
     
     def _adj_lin(self, params:npt.NDArray, data:npt.NDArray) ->npt.NDArray:
         sir0, mod0, tp0, fp0 = self.unpack_params(params, True)
         updater = SIRUpdate(*mod0)
-        sirdata = np.zeros((self.nt,self._sir_size))
-        for it in range(self.nt):
-            sirdata[it,:]= sir0
-            sir0 += self._dt*updater.f(sir0)
-
         dtp = 0
         dfp = 0
         dmod = np.zeros(self._mod_size)
         dsir = np.zeros(self._sir_size)
+        sirdata = np.zeros((self.nt,self._sir_size))
+        for it in range(self.nt):
+            sirdata[it,:]= sir0
+            sir0 += self._dt*updater.f(sir0)
+            if np.isnan(sir0).any():
+                dmod.fill(np.finfo(dmod.dtype).max)
+                return self.pack_params((dsir, dmod, dtp, dfp))
+
         for it in reversed(range(self._nt)):
             sir0 = sirdata[it,:]
             dmod += self.dt*updater.dmod_df( sir0 ,dsir)
