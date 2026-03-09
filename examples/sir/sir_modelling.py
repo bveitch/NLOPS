@@ -2,187 +2,241 @@ import numpy as np
 import numpy.typing as npt
 from src.operators.base import NLBase
 from examples.sir.sir_update import SIRUpdate
+from examples.sir.sir_params import (
+    SISIZE, 
+    SIRSIZE, 
+    SIRMODSIZE, 
+    SiModPtfParams, 
+    SiModPtfParser,
+    SiPtfParams,
+    SiPtfParser,
+    si0_to_sir0,
+    dsir_to_dsi,
+    dsi_to_dsir
+)
 
 class SIRSampler:
-
+    
+    @staticmethod
+    def ptf_size():
+        return 2
+    
+    @staticmethod
+    def data_size():
+        return 1
+    
     @staticmethod
     def f(params):
-        (tp, fp, sir) = params
+        (ptf, sir) = params
         i =sir[1]
-        return tp*i + fp*(1-i)
+        return ptf[0]*i + ptf[1]*(1-i)
 
     @staticmethod
     def df_lin(params0, dparams):
-        (tp0, fp0, sir0) = params0
-        (dtp, dfp, dsir) = dparams
+        (ptf0, sir0) = params0
+        (dptf, dsir) = dparams
         i0 = sir0[1]
         di = dsir[1]
-        return dtp*i0 + dfp*(1-i0) + (tp0-fp0)*di
+        return ( dptf[0]*i0 + dptf[1]*(1-i0) 
+                + (ptf0[0]-ptf0[1])*di )
 
     @staticmethod
     def df_adj(params0, data):
-        (tp0, fp0, sir0) = params0
+        (dptf0, sir0) = params0
         i0 = sir0[1]
-        dtp = i0*data
-        dfp = (1-i0)*data
+        dpt = i0*data
+        dpf = (1-i0)*data
         dsir = np.zeros(sir0.shape)
-        dsir[1] = (tp0-fp0)*data
-        return (dtp, dfp, dsir)
+        dsir[1] = (dptf0[0]-dptf0[1])*data
+        return (np.array([dpt, dpf]), dsir)
 
-def unpack_params(params, sample_infectives = False, sir_is_base=True):
-    if sample_infectives:
-        [s0, i0, a, b, tp, fp] = params.tolist() 
-    else:
-        [s0, i0, a, b] = params.tolist()
-        tp, fp = None, None
-    r0 = - s0 - i0
-    if sir_is_base:
-        r0 += 1
-    return np.array([s0, i0, r0]), np.array([a,b]), tp, fp
-
-def pack_params(params, sample_infectives):
-    sir, mod, tp, fp = params
-    a = mod[0]
-    b = mod[1]
-    s0 = sir[0] - sir[2]
-    i0 = sir[1] - sir[2]
-    if sample_infectives:
-        return np.array([s0, i0, a, b,  tp, fp])
-    else:
-        return np.array([s0, i0, a, b]) 
-
-class SIRModel(NLBase):
-
+class SIRModelling(NLBase):
+        
     def __init__(self, T: float, dt: float, Tsub: float, sample_i=False):
-        self._T = T
-        self._Tsub = Tsub
-        self._dt = dt
-        self._nt = int(T/dt)
-        self._ntsub = int(T/Tsub)
-        self._jtsub = int(Tsub/dt)
-        self._sir_size = SIRUpdate.sir_size()
-        self._mod_size = SIRUpdate.mod_size()
-        self._sample_i = sample_i
-        if self._sample_i:
-            self._dsize = 1
-            input_size = self._sir_size + self._mod_size + 1
+        self.T = T
+        self.Tsub = Tsub
+        self.dt = dt
+        self.nt = int(T/dt)
+        self.ntsub = int(T/Tsub)
+        self.jtsub = int(Tsub/dt)
+        self.updater = SIRUpdate
+        self.sample_i = sample_i
+        if sample_i:
+            self.mdims = (SISIZE, SIRMODSIZE, SIRSampler.ptf_size())
+            data_size = SIRSampler.data_size()
         else:
-            self._dsize = self._sir_size
-            input_size = self._sir_size - 1 + self._mod_size
+            self.mdims = (SISIZE, SIRMODSIZE, 0)
+            data_size = SIRSIZE 
+        input_size = sum(self.mdims)
         super().__init__(input_shape =  (input_size), 
-                         output_shape = (self._ntsub,self._dsize),
-                         name = "SIRMod")
-    
-    def create_sampler(self):
-        return SIRModel(T=self._T, 
-                        dt=self.dt, 
-                        Tsub=self._Tsub, 
-                        sample_i=True)
-    
-    @property
-    def dt(self) -> int:
-        return self._dt
-    
-    @property
-    def nt(self) -> int:
-        return self._nt
-    
-    @property
-    def tvalues(self, T0 = 0., units = "days") -> int:
-        dtype = np.dtype(float, metadata={"units": units})
-        return np.linspace(T0, self._T + T0, num = self._ntsub, dtype=dtype)
-    
-    @classmethod
-    def from_tvalues(cls, tvalues, dt, sample_i):
-        T = tvalues.max() - tvalues.min()
-        ntsub = len(tvalues)
-        Tsub = T/ntsub
-        return cls(T =T, dt=dt, Tsub = Tsub, sample_i=sample_i)
+                         output_shape = (self.ntsub,data_size),
+                         name = "SIRModelling")
+
+    def tvalues(self, T0 = 0., units = "days") -> npt.NDArray:
+        tvalues_dtype = np.dtype(float, metadata={"units": units})
+        print(tvalues_dtype.metadata)
+        return np.linspace(T0, self.T + T0, num = self.ntsub, dtype=tvalues_dtype)
     
     def _check_shape(self, shape:tuple, is_fwd:bool):
         if is_fwd:
-            assert shape == self.input_shape, f"SIRModel: {shape=} != {self.input_shape}"
+            assert shape == self.input_shape, f"{self.name}: {shape=} != {self.input_shape}"
         else:
-            assert shape == self.output_shape, f"SIRModel: {shape=} != {self.output_shape}"
-
-    def _fwd_nl(self, params:npt.NDArray) ->npt.NDArray:
-        sir0, mod, tp, fp = unpack_params(params, 
-                                          sample_infectives=self._sample_i, 
-                                          sir_is_base=True)
+            assert shape == self.output_shape, f"{self.name}: {shape=} != {self.output_shape}"
+    
+    def create_sampler(self):
+        return SIRModelling(T=self.T, 
+                        dt=self.dt, 
+                        Tsub=self.Tsub, 
+                        sample_i=True)
+    
+    def _fwd_nl_tuple(self, params:SiModPtfParams) ->npt.NDArray:
+        si0, mod, ptf = params.si, params.mod, params.ptf
+        sir0 = si0_to_sir0(si0)
         data = np.zeros(self.output_shape)
         updater = SIRUpdate(*mod)
-        for it in range(self._nt):
-            if(it % self._jtsub==0):
-                jt=int(it/self._jtsub)
-                if self._sample_i:
-                    data[jt,:] = SIRSampler.f(params = (tp, fp, sir0))
+        for it in range(self.nt):
+            if(it % self.jtsub==0):
+                jt=int(it/self.jtsub)
+                if self.sample_i:
+                    data[jt,:] = SIRSampler.f(params = (ptf, sir0))
                 else:    
                     data[jt,:] = sir0
-            sir0 += self._dt*updater.f(sir0)
+            sir0 += self.dt*updater.f(sir0)
             if not np.isfinite(sir0).all():
-                return data.fill(np.nan)
+                data.fill(0.)
+                return data
         return data
     
-    def _fwd_lin(self, params:npt.NDArray, dparams:npt.NDArray) ->npt.NDArray:
-        sir0, mod0, tp0, fp0 = unpack_params(params, 
-                                            sample_infectives=self._sample_i, 
-                                            sir_is_base=True)
-        dsir, dmod, dtp, dfp = unpack_params(dparams, 
-                                            sample_infectives=self._sample_i, 
-                                            sir_is_base=False)
+    def _fwd_lin_tuple(self, params0:SiModPtfParams, dparams:SiModPtfParams) ->npt.NDArray:
+        si0, mod0, ptf0 = params0.si, params0.mod, params0.ptf
+        dsi, dmod, dptf = dparams.si, dparams.mod, dparams.ptf
+        sir0 = si0_to_sir0(si0)
+        dsir = dsi_to_dsir(dsi)
         data = np.zeros(self.output_shape)
         updater = SIRUpdate(*mod0)
-        for it in range(self._nt):
-            if(it % self._jtsub==0):
-                jt=int(it/self._jtsub)
-                if self._sample_i:
-                    data[jt,:] = SIRSampler.df_lin(params0 = (tp0, fp0, sir0), 
-                                                   dparams = (dtp, dfp, dsir))
+        for it in range(self.nt):
+            if(it % self.jtsub==0):
+                jt=int(it/self.jtsub)
+                if self.sample_i:
+                    data[jt,:] = SIRSampler.df_lin(params0 = (ptf0, sir0), 
+                                                   dparams = (dptf, dsir))
                 else:
                     data[jt,:] = dsir
-            dsir += self._dt*updater.df_dsir(sir0,dsir)
-            dsir += self._dt*updater.df_dmod(sir0,dmod)
-            sir0 += self._dt*updater.f(sir0)
+            dsir += self.dt*updater.df_dsir(sir0,dsir)
+            dsir += self.dt*updater.df_dmod(sir0,dmod)
+            sir0 += self.dt*updater.f(sir0)
             if not np.isfinite(sir0).all():
-                return data.fill(np.nan)
+                data.fill(0)
+                return data
         return data
     
-    def _adj_lin(self, params:npt.NDArray, data:npt.NDArray) ->npt.NDArray:
-        sir0, mod0, tp0, fp0 = unpack_params(params, 
-                                            sample_infectives=self._sample_i, 
-                                            sir_is_base=True)
+    def _adj_lin_tuple(self, params0:SiModPtfParams, data:npt.NDArray) ->npt.NDArray:
+        si0, mod0, ptf0 = params0.si, params0.mod, params0.ptf
+        sir0 = si0_to_sir0(si0)
         updater = SIRUpdate(*mod0)
-        dtp = 0
-        dfp = 0
-        dmod = np.zeros(self._mod_size)
-        dsir = np.zeros(self._sir_size)
-        sirdata = np.zeros((self.nt,self._sir_size))
+        if ptf0 is not None:
+            dptf = np.zeros((ptf0.size))
+        else:
+            dptf = None
+        dmod = np.zeros(SIRMODSIZE)
+        dsir = np.zeros(SIRSIZE)
+        sirdata = np.zeros((self.nt,SIRSIZE))
         for it in range(self.nt):
             sirdata[it,:]= sir0
-            sir0 += self._dt*updater.f(sir0)
+            sir0 += self.dt*updater.f(sir0)
             if np.isnan(sir0).any():
                 dmod.fill(np.nan)
-                return self.pack_params((dsir, dmod, dtp, dfp), 
-                                        sample_infectives=self._sample_i)
+                dsi = dsir_to_dsi(dsir)
+                return SiModPtfParams(dsi, dmod, dptf)
 
-        for it in reversed(range(self._nt)):
+        for it in reversed(range(self.nt)):
             sir0 = sirdata[it,:]
             dmod += self.dt*updater.dmod_df( sir0 ,dsir)
             dsir += self.dt*updater.dsir_df( sir0, dsir)
-            if(it % self._jtsub==0):
-                jt=int(it/self._jtsub)
-                if self._sample_i:
-                    dparams = SIRSampler.df_adj(params0 = (tp0, fp0, sir0), 
+            if(it % self.jtsub==0):
+                jt=int(it/self.jtsub)
+                if self.sample_i:
+                    dparams = SIRSampler.df_adj(params0 = (ptf0, sir0), 
                                                 data = data[jt,0])
-                    dtp += dparams[0]
-                    dfp += dparams[1]
-                    dsir += dparams[2]
+                    dptf += dparams[0]
+                    dsir += dparams[1]
                 else:
                     dsir += data[jt,:]
-        return pack_params((dsir, dmod, dtp, dfp), 
-                           sample_infectives=self._sample_i)
+            dsi = dsir_to_dsi(dsir)
+        return SiModPtfParams(dsi, dmod, dptf)
+
+    def _fwd_nl(self, input:npt.NDArray) ->npt.NDArray:
+        params = SiModPtfParser.from_numpy(input, dims =self.mdims)
+        return self._fwd_nl_tuple(params) 
+    
+    def _fwd_lin(self, input:npt.NDArray, dinput:npt.NDArray) ->npt.NDArray:
+        params0 = SiModPtfParser.from_numpy(input, dims = self.mdims)
+        dparams = SiModPtfParser.from_numpy(dinput, dims = self.mdims)
+        return self._fwd_lin_tuple(params0, dparams) 
+    
+    def _adj_lin(self, input:npt.NDArray, data:npt.NDArray) ->npt.NDArray:
+        params0 = SiModPtfParser.from_numpy(input, dims = self.mdims)
+        dparams = self._adj_lin_tuple(params0, data)
+        return SiModPtfParser.to_numpy(dparams, dims = self.mdims)
+    
   
-def sample(pinfectives, tp, fp, nsamples, seed =1000):
+class SIRFixedModelling(SIRModelling):
+
+    def __init__(self, T: float, dt: float, Tsub: float, model0:npt.NDArray, sample_i=False):
+        super().__init__(T=T, dt=dt, Tsub=Tsub, sample_i = sample_i)
+        assert model0.size == SIRMODSIZE
+        self.model0 = model0 
+        if sample_i:
+            self.mfixed_dims = (SISIZE, SIRSampler.ptf_size())
+        else:
+            self.mfixed_dims = (SISIZE, 0)
+        input_size = sum(self.mfixed_dims)
+        self.input_shape = (input_size)
+        self.name = "SIRFixedModelling"
+
+    @classmethod
+    def create_fixed_mod(cls, sirmod: SIRModelling, model0:npt.NDArray):
+        return cls(T=sirmod.T, 
+                dt=sirmod.dt, 
+                Tsub=sirmod.Tsub, 
+                model0 = model0,
+                sample_i=sirmod.sample_i)
+    
+    def create_sampler(self):
+        return SIRFixedModelling(T=self.T, 
+                        dt=self.dt, 
+                        Tsub=self.Tsub, 
+                        sample_i=True)
+
+    def _fwd_nl(self, input:npt.NDArray) ->npt.NDArray:
+        params = SiPtfParser.from_numpy(input, dims = self.mfixed_dims)
+        params = SiModPtfParams(params.si, self.model0, params.ptf)
+        return self._fwd_nl_tuple(params)
+
+    def _fwd_lin(self, input:npt.NDArray, dinput:npt.NDArray) ->npt.NDArray:
+        params0 = SiPtfParser.from_numpy(input, dims = self.mfixed_dims)
+        dparams = SiPtfParser.from_numpy(dinput, dims = self.mfixed_dims)
+        params0 = SiModPtfParams(params0.si, self.model0, params0.ptf)
+        dparams = SiModPtfParams(dparams.si, np.zeros(self.model0.size), dparams.ptf)
+        return self._fwd_lin_tuple(params0, dparams) 
+    
+    def _adj_lin(self, input:npt.NDArray, data:npt.NDArray) ->npt.NDArray:
+        params0 = SiPtfParser.from_numpy(input, dims = self.mfixed_dims)
+        params0 = SiModPtfParams(params0.si, self.model0, params0.ptf)
+        dparams = self._adj_lin_tuple(params0, data)
+        dparams = SiPtfParams(dparams.si, dparams.ptf)
+        return SiPtfParser.to_numpy(dparams, dims = self.mfixed_dims)
+ 
+def simulate_epidemic(T:float , dt:float, Tsub:float, Npopulation:float, sir_model:npt.NDArray):
+    i0=1.0/Npopulation
+    s0 = 1-i0
+    initial_si = np.array([s0, i0])
+    model = np.concatenate([initial_si, sir_model])
+    modeller = SIRModelling(T, dt, Tsub)
+    tvalues = modeller.tvalues()
+    return modeller(model), tvalues, modeller
+
+def sample(pinfectives, tp, fp, nsamples, seed = 1000):
     rng = np.random.default_rng(seed=seed)
     nt = pinfectives.shape[0]
     p = tp * pinfectives + (1-pinfectives) * fp

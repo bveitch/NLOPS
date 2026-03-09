@@ -18,11 +18,19 @@ class NLBase(ABC):
     def name(self):
         return self._name
     
+    @name.setter
+    def name(self, val):
+        self._name = val
+
     @property
     def input_shape(self):
         if isinstance(self._input_shape, int):
             return tuple([self._input_shape])
         return self._input_shape
+    
+    @input_shape.setter
+    def input_shape(self, shape):
+        self._input_shape = shape
     
     @property
     def output_shape(self):
