@@ -78,6 +78,13 @@ def create_binomial_fit():
     operator = Sigmoid(shape = mshape)
     return BinomialFit(shape=mshape, operator = operator, data = data)
 
+def create_binomial_fit2():
+    operator = create_matrix_operator()
+    dshape = operator.output_shape
+    mshape = operator.input_shape
+    data = np.random.rand(*dshape)
+    return BinomialFit(shape=mshape, operator = operator, data = data)
+
 def create_chain_binomial_fit():
     mop = create_matrix_operator()
     dshape = mop.output_shape
@@ -95,6 +102,7 @@ def create_objective():
             "constrained_l2" : create_constrained_l2,
             "normal": create_normal_fit,
             "binomial": create_binomial_fit,
+            "binomial2": create_binomial_fit2,
             "chain_binomial": create_chain_binomial_fit,
         }
         return objectives[name]()
@@ -102,8 +110,7 @@ def create_objective():
     return _create_objective
 
 pytestmark = pytest.mark.parametrize("name", 
-    ["l2", "constrained_l2", "normal", "binomial", "chain_binomial"])
-
+    [ "l2", "constrained_l2", "normal", "binomial", pytest.param("binomial2", marks=pytest.mark.xfail), "chain_binomial"])
 def test_objective(name, create_objective):
     objective = create_objective(name)
     input = np.zeros((objective.xshape),dtype=np.float64)

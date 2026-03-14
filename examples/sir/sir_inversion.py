@@ -39,9 +39,13 @@ class SIRInversion:
         else:
             objfn = dobjfn
         self._solver = GeneralSolver(objfn)
-
-    def add_regularization(self, regularizer:tuple[npt.NDArray, np.float64]):
-        return SIRInversion(self.sirmod, )
+        self._results = {
+            "starting_model" : None, 
+            "final_model": None,
+            "iterations": None,
+            "sirdata": None,
+            "predicted_samples": None,
+            "runtime": None}
 
     def create_input(self, params):
         si_size, m_size, _ = self.sirmod.mdims
@@ -49,7 +53,11 @@ class SIRInversion:
         return params[:input_size]
     
     def __call__(self, x0):
+        self._results["starting_model"] = x0
         params = self._solver.solve(x0)
+        self._results["final_model"] = params
+        self._results["iterations"] = self.iterations
+        self._results["runtime"] = self._solver.runtime
         prediction = self.sirmod(params)
         if self.sirmod.sample_i == True:
             input = self.create_input(params)
@@ -57,9 +65,16 @@ class SIRInversion:
                                     self.sirmod.dt,
                                     self.sirmod.Tsub)
             sirprediction = simulator(input)
-            return np.squeeze(prediction), params, sirprediction
+            self._results["predicted_samples"] = np.squeeze(prediction)
+            self._results["sirdata"] = sirprediction
         else:
-            return prediction, params
+            self._results["sirdata"] = prediction
+        return self._results
+    
+    @property
+    def iterations(self):
+        f0 = self._solver.iterations[0]["fk"]
+        return [ iter["fk"]/f0 for iter in self._solver.iterations]
 
 class SIRFixedInversion(SIRInversion):
 
@@ -76,5 +91,24 @@ class SIRFixedInversion(SIRInversion):
         si_size, _ = self.sirmod.mfixed_dims
         input_size = si_size
         return np.concatenate((params[:input_size], self.model))
+    
+def run_infectives_inversion(samples, sir_sample_mod, initial_condition, starting_model, test_params, **kwargs):
+    infectives_data = samples[:,np.newaxis]
+    xstart = np.concatenate([initial_condition, starting_model, test_params])
+
+    if kwargs.get("fixed_model", False):
+        print("using fixed model")
+        sirinv = SIRFixedInversion.from_sirmod(sirmod=sir_sample_mod, 
+                                            data=infectives_data,
+                                            model0= starting_model)
+        xstart = np.concatenate([initial_condition, test_params])
+    elif "regularization" in kwargs.keys():
+        print(f"using regularization: {kwargs["regularization"]}")
+        sirinv = SIRInversion(sirmod=sir_sample_mod, data=infectives_data, regularizer=kwargs["regularization"])
+    else:
+        print("standard mode")
+        sirinv = SIRInversion(sirmod=sir_sample_mod, data=infectives_data)
+    return sirinv(x0 = xstart)
+        
 
         

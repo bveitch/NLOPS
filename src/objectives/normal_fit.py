@@ -5,6 +5,8 @@ from src.operators.chain import NLChain
 
 class NormalFit(L2ObjectiveFn):
 
+    eps = 0.001
+
     def __init__(self, 
                  shape: tuple,
                  predictor: NLBase, 
@@ -19,22 +21,22 @@ class NormalFit(L2ObjectiveFn):
         super().__init__(shape, predictor, data)
     
     @staticmethod
-    def _safe_log(input):
-        eps = np.sqrt(np.finfo(input.dtype).eps)
+    def _safe_log(input, eps):
         v = input.astype(complex) + 1j*eps
         v = np.where(np.abs(input) > 1, np.log(v), -np.log(1.0/v))
-        return np.abs(v)
+        return v.real
     
     def _eval(self, mu, var):
         v = mu - self.data
-        logvar=np.log(var)
-        return 0.5*np.sum(v**2/var) + 0.5*np.sum(logvar)
+        eps = NormalFit.eps
+        logvar=NormalFit._safe_log(var, eps)
+        return 0.5*np.sum(v**2*var/(var**2+eps**2)) + 0.5*np.sum(logvar)
                                 
     def _grad(self, mu, var):
         v = mu - self.data
-        eps = np.finfo(var.dtype).eps
-        gmu = v/(var+eps)
-        gvar = 0.5*(var-v**2)/(var+eps)**2 
+        eps = NormalFit.eps
+        gmu = v*var/(var**2+eps**2)
+        gvar = 0.5*var/(var**2+eps**2) - 0.5*(var**2-eps**2)*v**2/(var**2+eps**2)**2
         return np.stack([gmu, gvar])
      
     def _value(self, x):
