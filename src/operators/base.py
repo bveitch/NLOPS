@@ -18,11 +18,19 @@ class NLBase(ABC):
     def name(self):
         return self._name
     
+    @name.setter
+    def name(self, val):
+        self._name = val
+
     @property
     def input_shape(self):
         if isinstance(self._input_shape, int):
             return tuple([self._input_shape])
         return self._input_shape
+    
+    @input_shape.setter
+    def input_shape(self, shape):
+        self._input_shape = shape
     
     @property
     def output_shape(self):
@@ -96,15 +104,15 @@ def check_dot_product(operator: NLBase, input:npt.NDArray):
     output_shape = operator.output_shape
     x = np.random.random(input_shape)
     y = np.random.random(output_shape)
-    yTAx=y.dot(operator.linear(input, x))
-    xTATy=x.dot(operator.adjoint(input, y))
+    yTAx=np.sum(y*operator.linear(input, x))
+    xTATy=np.sum(x*operator.adjoint(input, y))
     np.testing.assert_allclose(yTAx, xTATy)
 
-def check_linearization(operator: NLBase, input:npt.NDArray, eps=1.0e-6):
+def check_linearization(operator: NLBase, input:npt.NDArray, eps=1.0e-6, atol=1.0e-6):
     input_shape = operator.input_shape
     dx = np.random.random(input_shape)
     fpx=operator(input+eps*dx)
     fmx=operator(input-eps*dx)
     df = (fpx-fmx)*(0.5/eps)
     Fmx=operator.linear(input,dx)
-    np.testing.assert_allclose(df, Fmx, atol=1.0e-6, rtol=eps*eps*dx.dot(dx))
+    np.testing.assert_allclose(df, Fmx, atol=atol, rtol=eps*eps*dx.dot(dx))
