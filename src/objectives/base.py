@@ -47,7 +47,6 @@ class L2ObjectiveFn(ObjectiveFn):
                  data: npt.NDArray | None = None):
         self.op = operator
         self.d = data
-        print(f"{shape=}")
         super().__init__(shape)
 
     @property

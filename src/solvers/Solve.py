@@ -25,6 +25,8 @@ class GeneralSolver:
         if x0 is None:
             xsize = self.objfn.xsize
             x0 = np.zeros(xsize)
+        else:
+            assert x0.size == self.objfn.xsize
         if self.niter ==0:
             xsol = self.objfn.gradient(x0)
             return self.objfn.unravel(xsol)

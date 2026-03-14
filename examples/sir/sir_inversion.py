@@ -3,6 +3,8 @@ import numpy as np
 import numpy.typing as npt
 from examples.sir.sir_modelling import SIRModelling, SIRFixedModelling
 from src.objectives.base import L2ObjectiveFn
+from src.objectives.sum_objective import SumObjectiveFn
+from src.objectives.normal_fit import BinomialFit
 from src.solvers.Solve import GeneralSolver
 
 def sir_objfn(data: npt.NDArray, 
@@ -10,15 +12,36 @@ def sir_objfn(data: npt.NDArray,
     datashape = data.shape 
     assert sirmod.output_shape == datashape, f"{sirmod.output_shape=} doesnt match {datashape=}"
     mod_shape = sirmod.input_shape
-    objfn = L2ObjectiveFn(mod_shape, operator = sirmod, data = data)
-    return objfn
+    return L2ObjectiveFn(mod_shape, operator = sirmod, data = data)
+
+def sir_binomial_objfn(data: npt.NDArray, 
+              sirmod: SIRModelling) -> L2ObjectiveFn:
+    datashape = data.shape 
+    assert sirmod.output_shape == datashape, f"{sirmod.output_shape=} doesnt match {datashape=}"
+    mod_shape = sirmod.input_shape
+    return BinomialFit(mod_shape, operator = sirmod, data = data)
 
 class SIRInversion:
 
-    def __init__(self, sirmod, data):
+    def __init__(self, sirmod, data, datafit="L2", regularizer:tuple[npt.NDArray, np.float64]|None =None):
         self.sirmod = sirmod
-        sirobjfn = sir_objfn(data, self.sirmod)
-        self._solver = GeneralSolver(sirobjfn)
+        if datafit == "L2":
+            dobjfn = sir_objfn(data, self.sirmod)
+        elif datafit == "Binomial":
+            dobjfn = sir_binomial_objfn(data, self.sirmod)
+        else:
+            raise ValueError(f"{datafit} is not defined")
+        if regularizer is not None:
+            xshape = dobjfn.xshape
+            mreg, vreg = regularizer
+            robjfn = L2ObjectiveFn(xshape, operator = None, data = mreg)
+            objfn =  SumObjectiveFn([dobjfn, robjfn], [1.0, vreg])
+        else:
+            objfn = dobjfn
+        self._solver = GeneralSolver(objfn)
+
+    def add_regularization(self, regularizer:tuple[npt.NDArray, np.float64]):
+        return SIRInversion(self.sirmod, )
 
     def create_input(self, params):
         si_size, m_size, _ = self.sirmod.mdims
@@ -27,12 +50,16 @@ class SIRInversion:
     
     def __call__(self, x0):
         params = self._solver.solve(x0)
-        input = self.create_input(params)
-        print(input)
-        simulator = SIRModelling(self.sirmod.T,
-                                 self.sirmod.dt,
-                                 self.sirmod.Tsub)
-        return simulator(input), params
+        prediction = self.sirmod(params)
+        if self.sirmod.sample_i == True:
+            input = self.create_input(params)
+            simulator = SIRModelling(self.sirmod.T,
+                                    self.sirmod.dt,
+                                    self.sirmod.Tsub)
+            sirprediction = simulator(input)
+            return np.squeeze(prediction), params, sirprediction
+        else:
+            return prediction, params
 
 class SIRFixedInversion(SIRInversion):
 

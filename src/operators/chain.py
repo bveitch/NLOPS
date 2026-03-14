@@ -26,16 +26,12 @@ class NLChain(NLBase):
         return " * ".join(names) 
         
     def __mul__(self, front: NLBase):
-        input_shape = front.input_shape
-        output_shape = self.output_shape
-        nl_operators = self.operators.insert(0, front)
-        return NLChain(input_shape, output_shape, nl_operators)
+        nl_operators = [front]+self.operators
+        return NLChain(nl_operators)
     
     def __rmul__(self, back: NLBase):
-        input_shape = self.input_shape
-        output_shape = back.output_shape
-        nl_operators = self.operators.append(back)
-        return NLChain(input_shape, output_shape, nl_operators)
+        nl_operators = self.operators + [back]
+        return NLChain(nl_operators)
     
     def _check_shape(self, shape:tuple, is_fwd:bool):
         if is_fwd:

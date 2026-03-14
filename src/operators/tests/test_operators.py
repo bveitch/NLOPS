@@ -3,6 +3,7 @@ import numpy as np
 from src.operators.matrix import MatrixOperator
 from src.operators.constraints import Sigmoid
 from src.operators.chain import NLChain
+from src.operators.vector import NLVector
 from src.operators.base import check_dot_product, check_linearization
 from src.operators.symbolic import SymbolicOperator
 
@@ -21,6 +22,15 @@ def create_nlchain_operator():
     op3 = MatrixOperator(M3, "matop2")
     return NLChain([op1, op2, op3])
 
+def create_vector_operator():
+    size = 5
+    M1 = np.ones((size, size))
+    M3 = 0.1*np.eye(size)
+    op1 = MatrixOperator(M1, "matop1")
+    op2 = Sigmoid(op1.input_shape)
+    op3 = MatrixOperator(M3, "matop2")
+    return NLVector([op1, op2, op3])
+
 def create_sympy_operator():
     return SymbolicOperator(
         exprs = ["x*y*z", "x+y+z"],
@@ -35,13 +45,14 @@ def create_operator():
             "matrix"  : create_matrix_operator,
             "sigmoid" : create_sigmoid_operator,
             "nlchain" : create_nlchain_operator,
+            "vector"  : create_vector_operator,
             "sympy"   : create_sympy_operator,
         }
         return operators[name]()
 
     return _create_operator
 
-pytestmark = pytest.mark.parametrize("name", ["matrix", "sigmoid", "nlchain", "sympy"])
+pytestmark = pytest.mark.parametrize("name", ["matrix", "sigmoid", "nlchain", "vector", "sympy"])
 
 def test_dot_product(name, create_operator):
     operator = create_operator(name)

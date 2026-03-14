@@ -14,7 +14,7 @@ from src.objectives.base import check_objective
 from sir_params import SISIZE, SIRMODSIZE
 from sir_update import SIRUpdate, SIRSympyUpdate
 from sir_modelling import SIRModelling, SIRFixedModelling, SIRSampler, sample
-from sir_inversion import sir_objfn
+from sir_inversion import sir_objfn, sir_binomial_objfn
 
 
 @pytest.mark.parametrize("s, i, a, b", 
@@ -117,20 +117,41 @@ def test_linearization(name, input, atol):
     sirmod = create_mod(input.size, name)
     check_linearization(sirmod, input, atol=atol)
 
-def create_sir_objfn(input, name):
-    sirmod = create_mod(input.size, name = name)
+def create_sir_objfn(input, modname):
+    sirmod = create_mod(input.size, name = modname)
     data = sirmod(input)
     return sir_objfn(data, sirmod)
 
-@pytest.mark.parametrize("name, input", [
-    ("sirmod", np.array([0.9, 0.1, 0.21, 0.11, 0.9, 0.1])),
-    ("sirmod", np.array([0.999, 0.001, 0.3, 0.11])),
-    ("sirmodfixed", np.array([0.9, 0.1, 0.9, 0.1])),
-    ("sirmodfixed", np.array([0.998, 0.002, 0.999, 0.001])),
-    ("sirmodfixed", np.array([0.999, 0.001])),
+def create_sir_binomial_objfn(input, modname):
+    sirmod = create_mod(input.size, name = modname)
+    data = sirmod(input)
+    return sir_binomial_objfn(data, sirmod)
+
+@pytest.fixture
+def create_objfn():
+
+    def _create_objfn(datafit):
+        objfn = {
+            'l2':create_sir_objfn, 
+            "binomial": create_sir_binomial_objfn
+        }
+        return objfn[datafit]
+    return _create_objfn
+    
+
+@pytest.mark.parametrize("name, input, datafit", [
+    ("sirmod", np.array([0.9, 0.1, 0.21, 0.11, 0.9, 0.1]),"l2"),
+    ("sirmod", np.array([0.999, 0.001, 0.3, 0.11]),"l2"),
+    ("sirmodfixed", np.array([0.9, 0.1, 0.9, 0.1]),"l2"),
+    ("sirmodfixed", np.array([0.998, 0.002, 0.999, 0.001]),"l2"),
+    ("sirmodfixed", np.array([0.999, 0.001]),"l2"),
+    ("sirmod", np.array([0.9, 0.1, 0.21, 0.11, 0.9, 0.1]),"binomial"),
+    ("sirmod", np.array([0.999, 0.001, 0.3, 0.11]),"binomial"),
+    ("sirmodfixed", np.array([0.9, 0.1, 0.9, 0.1]),"binomial"),
+    ("sirmodfixed", np.array([0.999, 0.001]),"binomial"),
 ])
 
-def test_objective(name, input):
-    objective = create_sir_objfn(input, name)
+def test_objective(name, input, datafit, create_objfn):
+    objective = create_objfn(datafit)(input, name)
     input = np.zeros((objective.xshape),dtype=np.float64)
     check_objective(objective, input)
