@@ -23,17 +23,22 @@ def sir_binomial_objfn(data: npt.NDArray,
 
 def create_objfn(data, sirmod, datafit="L2"):
     if datafit == "L2":
-        return sir_objfn(data, sirmod)
+        objfn =  sir_objfn(data, sirmod)
     elif datafit == "Binomial":
-        return sir_binomial_objfn(data, sirmod)
+        objfn = sir_binomial_objfn(data, sirmod)
     else:
         raise ValueError(f"{datafit} is not defined")
+    setattr(objfn, "sirmod", sirmod)
+    return objfn
     
 class SIRInversion:
 
     def __init__(self, dobjfn: L2ObjectiveFn, regularizer:tuple[L2ObjectiveFn, np.float64]|None =None):
         self.dobjfn = dobjfn 
-        self.sirmod = dobjfn.operator
+        try:
+            self.sirmod = getattr(dobjfn, "sirmod")
+        except:
+            AttributeError(f"sirmod not found in {dobjfn}") 
         if regularizer is not None:
             robjfn, vreg = regularizer
             objfn =  SumObjectiveFn([dobjfn, robjfn], [1.0, vreg])
@@ -85,8 +90,11 @@ class SIRInversion:
     
     @property
     def iterations(self):
-        f0 = self._solver.iterations[0]["fk"]
-        return [ iter["fk"]/f0 for iter in self._solver.iterations]
+        if self._solver.iterations:
+            f0 = self._solver.iterations[0]["fk"]
+            return [ iter["fk"]/f0 for iter in self._solver.iterations]
+        else:
+            return None
 
 class SIRFixedInversion(SIRInversion):
 
@@ -101,9 +109,9 @@ class SIRFixedInversion(SIRInversion):
         return cls(dobjfn, model0)
 
     @classmethod
-    def from_sirmod(cls, sirmod: SIRModelling, data, model0:npt.NDArray):
+    def from_sirmod(cls, sirmod: SIRModelling, data, model0:npt.NDArray, datafit="L2"):
         sirfixedmod = SIRFixedModelling.create_fixed_mod(sirmod, model0)
-        return cls.from_sirfixedmod(sirfixedmod, data)
+        return cls.from_sirfixedmod(sirfixedmod, data, datafit=datafit)
 
     def create_input(self, params):
         si_size, _ = self.sirmod.mfixed_dims
@@ -116,13 +124,18 @@ def run_infectives_inversion(samples, sir_sample_mod, initial_condition, startin
 
     if kwargs.get("fixed_model", False):
         print("using fixed model")
-        sirinv = SIRFixedInversion.from_sirmod(sirmod=sir_sample_mod, 
-                                            data=infectives_data,
-                                            model0= starting_model)
+        sirinv = SIRFixedInversion.from_sirmod(sirmod = sir_sample_mod, 
+                                                data = infectives_data,
+                                                model0 = starting_model,
+                                                datafit = kwargs.get("datafit", "L2"),
+                                                )
         xstart = np.concatenate([initial_condition, test_params])
     else:
         print("standard mode")
-        sirinv = SIRInversion.from_sirmod(sirmod=sir_sample_mod, data=infectives_data)
+        sirinv = SIRInversion.from_sirmod(sirmod=sir_sample_mod, 
+                                          data=infectives_data,
+                                          datafit = kwargs.get("datafit", "L2"),
+                                          )
 
     if "regularization" in kwargs.keys():
         print(f"using regularization: {kwargs["regularization"]}")
