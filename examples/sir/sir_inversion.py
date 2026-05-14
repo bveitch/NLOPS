@@ -5,7 +5,7 @@ from examples.sir.sir_modelling import SIRModelling, SIRFixedModelling
 from src.objectives.base import L2ObjectiveFn
 from src.objectives.sum_objective import SumObjectiveFn
 from src.objectives.normal_fit import BinomialFit
-from src.solvers.Solve import GeneralSolver
+from src.solvers.general import GeneralSolver
 
 def sir_objfn(data: npt.NDArray, 
               sirmod: SIRModelling) -> L2ObjectiveFn:

@@ -6,7 +6,7 @@ from src.operators import chain
 from src.operators import constraints 
 from src.objectives.base import L2ObjectiveFn
 from src.objectives.sum_objective import SumObjectiveFn
-from src.solvers.Solve import GeneralSolver
+from src.solvers.general import GeneralSolver
 
 def plot_rgb_filters():
     hsi2rgb = HSIToRGB()
