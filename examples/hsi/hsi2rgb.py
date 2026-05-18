@@ -21,13 +21,13 @@ def cosine_filter(npoints, start, end):
 
 class HSIToRGB(MatrixOperator):
     
-    def __init__(self, nchannels=21):
+    def __init__(self, nx, ny, nchannels=21):
         self._wavelengths = list(np.linspace(WMIN, WMAX, nchannels))
         self.rfilter = self._init_filter(WMINRED, WMAXRED)
         self.gfilter = self._init_filter(WMINGREEN, WMAXGREEN)
         self.bfilter = self._init_filter(WMINBLUE, WMAXBLUE)
         self._rgb_filters = np.array([self.rfilter, self.gfilter, self.bfilter])
-        super().__init__(M=self._rgb_filters, name = "HSIToRGB")
+        super().__init__(M=self._rgb_filters, name = "HSIToRGB", input_shape = (nx,ny,nchannels))
 
     def _init_filter(self, cmin, cmax):
         icmin = min(range(self.nchannels), key=lambda i: abs(self.wavelengths[i] - cmin))

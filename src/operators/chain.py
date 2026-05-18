@@ -12,8 +12,7 @@ class NLChain(NLBase):
         super().__init__(input_shape, output_shape, name)
         prev_output_shape = nl_operators[0].output_shape
         for operator in nl_operators[1:]:
-            assert operator.input_shape == prev_output_shape,\
-                f"shape failed : {operator.name}: {operator.input_shape} != {prev_output_shape}"
+            operator._check_shape(prev_output_shape, True)
             prev_output_shape = operator.output_shape
         self.operators = nl_operators
         
@@ -33,12 +32,6 @@ class NLChain(NLBase):
         nl_operators = self.operators + [back]
         return NLChain(nl_operators)
     
-    def _check_shape(self, shape:tuple, is_fwd:bool):
-        if is_fwd:
-            assert shape == self.input_shape, f"{self.name}: {shape=} != {self.input_shape}"
-        else:
-            assert shape == self.output_shape, f"{self.name}: {shape=} != {self.output_shape}"
-
     def _fwd_nl(self, input:npt.NDArray) ->npt.NDArray:
         output=input.copy()
         for operator in self.operators:

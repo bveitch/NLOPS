@@ -4,19 +4,18 @@ from src.operators.base import LBase
 
 class MatrixOperator(LBase):
     
-    def __init__(self, M: npt.NDArray, name:str):
-        output_shape, input_shape=M.shape
+    def __init__(self, M: npt.NDArray, name:str, input_shape: tuple|None = None, ):
+        output_size, input_size=M.shape
         self._M = M
-        super().__init__(input_shape=input_shape, output_shape=output_shape, name = name)
-
-
-    def _check_shape(self, input_shape, is_fwd):
-        size = input_shape[-1]
-        if is_fwd:
-            assert size == self._input_shape, f"{self.name}: {input_shape=}[-1] != {self._input_shape}"
+        if input_shape is not None:
+            assert input_size == input_shape[-1], f"{self.name}: {input_shape[-1]=} != {input_size}"
+            output_shape = list(input_shape)
+            output_shape[-1] = output_size 
         else:
-            assert size == self._output_shape, f"{self.name}: {input_shape=}[-1] != {self._output_shape}"
-
+            input_shape = (input_size)
+            output_shape = (output_size)
+        super().__init__(input_shape=input_shape, output_shape=output_shape, name = name)
+        
     def _fwd(self, hsi):
         return np.dot(hsi, self._M.T)
     

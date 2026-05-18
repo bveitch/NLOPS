@@ -51,6 +51,9 @@ class LassoADMM(BaseADMM):
         return shrinkage(x+u, self.l/self.rho)
     
 def bound(x, l, u, p):
+    assert p >= 0, f"bound: {p=} < 0"
+    if l > u:
+        return bound(x, u, l,p)
     return np.where(x<u, l+shrinkage(x, l, l-p), u+shrinkage(x, u+p, u))
 
 class BoundADMM(BaseADMM):
