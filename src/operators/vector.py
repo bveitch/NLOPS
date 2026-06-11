@@ -20,12 +20,6 @@ class NLVector(NLBase):
     def print_ops(self) -> str:
         return [ op.name for op in reversed(self.operators)]
     
-    def _check_shape(self, shape:tuple, is_fwd:bool):
-        if is_fwd:
-            assert shape == self.input_shape, f"{self.name}: {shape=} != {self.input_shape}"
-        else:
-            assert shape == self.output_shape, f"{self.name}: {shape=} != {self.output_shape}"
-
     def _fwd_nl(self, input:npt.NDArray) ->npt.NDArray:
         output = [ operator(input) for operator in self.operators]
         return np.stack(output, axis=0)

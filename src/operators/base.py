@@ -7,8 +7,14 @@ import numpy.typing as npt
 class NLBase(ABC):
 
     def __init__(self, input_shape:tuple, output_shape:tuple, name:str = "NLBase"):
-        self._input_shape = input_shape
-        self._output_shape = output_shape
+        if isinstance(input_shape, int):
+            self._input_shape = tuple([input_shape])
+        else:
+            self._input_shape = tuple(input_shape)
+        if isinstance(output_shape, int):
+            self._output_shape = tuple([output_shape])
+        else:
+            self._output_shape = tuple(output_shape)
         self._name = name
 
     def __str__(self):
@@ -24,8 +30,6 @@ class NLBase(ABC):
 
     @property
     def input_shape(self):
-        if isinstance(self._input_shape, int):
-            return tuple([self._input_shape])
         return self._input_shape
     
     @input_shape.setter
@@ -34,14 +38,14 @@ class NLBase(ABC):
     
     @property
     def output_shape(self):
-        if isinstance(self._output_shape, int):
-            return tuple([self._output_shape])
         return self._output_shape
     
-    @abstractmethod
     def _check_shape(self, shape:tuple, is_fwd:bool):
-        return NotImplemented
-  
+        if is_fwd:
+            assert shape == self.input_shape, f"{self.name}: {shape=} != {self.input_shape}"
+        else:
+            assert shape == self.output_shape, f"{self.name}: {shape=} != {self.output_shape}"
+
     @abstractmethod
     def _fwd_nl(self, input:npt.NDArray) ->npt.NDArray:
         return NotImplemented

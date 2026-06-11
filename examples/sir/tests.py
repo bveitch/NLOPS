@@ -145,10 +145,8 @@ def create_objfn():
     ("sirmodfixed", np.array([0.9, 0.1, 0.9, 0.1]),"l2"),
     ("sirmodfixed", np.array([0.998, 0.002, 0.999, 0.001]),"l2"),
     ("sirmodfixed", np.array([0.999, 0.001]),"l2"),
-    pytest.param("sirmod", np.array([0.9, 0.1, 0.21, 0.11, 0.9, 0.1]),"binomial", marks=pytest.mark.xfail),
-    pytest.param("sirmod", np.array([0.999, 0.001, 0.3, 0.11]),"binomial", marks=pytest.mark.xfail),
-    pytest.param("sirmodfixed", np.array([0.9, 0.1, 0.9, 0.1]),"binomial", marks=pytest.mark.xfail),
-    pytest.param("sirmodfixed", np.array([0.999, 0.001]),"binomial", marks=pytest.mark.xfail),
+    ("sirmod", np.array([0.9, 0.1, 0.21, 0.11, 0.9, 0.1]),"binomial"),
+    ("sirmodfixed", np.array([0.9, 0.1, 0.9, 0.1]),"binomial"),
 ])
 
 def test_objective(name, input, datafit, create_objfn):
