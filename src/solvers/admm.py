@@ -1,15 +1,27 @@
+import time
 import numpy as np
 from abc import ABC, abstractmethod
 from src.solvers.direct import direct_solve
 
 class BaseADMM(ABC):
 
-    def __init__(self, A, b, l, rho, niter):
+    def __init__(self, xshape, A, b, l, rho, niter=10, xtol =1.0e-6):
+        self.xshape = xshape
         self.A = A
         self.b = b
         self.l = l
         self.rho = rho
         self.niter = niter
+        self.xtol = xtol
+        self.runtime = None
+
+    
+    @classmethod
+    def from_objfn(cls, objfn,  l, rho, niter=10, xtol =1.0e-6):
+        xshape = objfn.xshape
+        A = objfn.op._M
+        b = objfn.d
+        return cls(xshape, A, b, l, rho, niter, xtol)
 
     @abstractmethod
     def _update_x(self, z, u):
@@ -23,10 +35,19 @@ class BaseADMM(ABC):
         return u + x - z
         
     def solve(self):
-        for _ in range(self.niter):
+        z = np.zeros(self.xshape)
+        u = np.zeros(self.xshape)
+        xprev = np.zeros(self.xshape)
+        ts = time.time()
+        for iter in range(self.niter):
             x = self._update_x( z, u)
             z = self._update_z( x, u)
             u = self._update_u(x,z,u)
+            dx = 0.5*np.sum((x-xprev)**2)
+            if dx < self.xtol:
+                break
+            xprev = x
+        self.runtime = time.time() - ts
         return x
 
 def shrinkage(x, u, l=None):
@@ -40,9 +61,6 @@ def shrinkage(x, u, l=None):
         return shrinkage(x, u, -u)
 
 class LassoADMM(BaseADMM):
-
-    def __init__(self, A, b, l, rho, niter):
-        super().__init__(A, b, l, rho, niter)
 
     def _update_x(self, z, u):
         return direct_solve(self.A, self.b, self.rho, z-u)
@@ -58,10 +76,17 @@ def bound(x, l, u, p):
 
 class BoundADMM(BaseADMM):
 
-    def __init__(self, A, b, l, rho, niter, lower=0, upper=1):
-        super().__init__(A, b, l, rho, niter)
+    def __init__(self, xshape, A, b, l, rho, niter, xtol=1.0e-6, lower=0, upper=1):
+        super().__init__(xshape, A, b, l, rho, niter, xtol)
         self.lower = lower
         self.upper = upper
+
+    @classmethod
+    def from_objfn(cls, objfn,  l, rho, niter=10, xtol =1.0e-6, lower=0, upper=1):
+        xshape = objfn.xshape
+        A = objfn.op._M
+        b = objfn.d
+        return cls(xshape, A, b, l, rho, niter, xtol, lower, upper)
 
     def _update_x(self, z, u):
         return direct_solve(self.A, self.b, self.rho, z-u)

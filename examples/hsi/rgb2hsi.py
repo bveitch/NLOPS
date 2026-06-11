@@ -8,6 +8,7 @@ from src.objectives.base import L2ObjectiveFn
 from src.objectives.sum_objective import SumObjectiveFn
 from src.solvers.general import GeneralSolver
 from src.solvers.direct import direct_solve, direct_solve_reverse
+from src.solvers.admm import BoundADMM
 
 def plot_rgb_filters():
     hsi2rgb = HSIToRGB()
@@ -38,27 +39,50 @@ def hsi_objfn(rgb_raw: npt.NDArray,
         constraint = None
         operator = hsi2rgb
     else:
-        constraint = Sigmoid(shape = hsi_shape, min=-0.1, max=1.0)
+        constraint = Sigmoid(shape = hsi_shape, min=0.0, max=1.0)
         operator = NLChain([constraint, hsi2rgb])
         robjfn = L2ObjectiveFn(hsi_shape)
     dobjfn = L2ObjectiveFn(hsi_shape, operator = operator, data = data)
     if robjfn is None:
         objfn=dobjfn
     else:
-        objfn=SumObjectiveFn([dobjfn, robjfn], [1,0.01])
+        objfn=SumObjectiveFn([dobjfn, robjfn], [1,0.001])
     setattr(objfn, 'wavelengths', wavelengths)
     setattr(objfn, 'constraint', constraint)
     return objfn
 
-def rgb2hsi(rgb_raw: npt.NDArray, reflectivity_bound: bool=True): 
-    objfn = hsi_objfn(rgb_raw, reflectivity_bound)
+def rgb2hsi_L2(rgb_raw: npt.NDArray, reflectivity_bound: bool=True): 
+    objfn = hsi_objfn(rgb_raw, reflectivity_bound=reflectivity_bound)
     wavelengths = objfn.wavelengths
     constraint = objfn.constraint
-    #solver = GeneralSolver(objfn, method='CG')
-    #hsi_data = solver.solve()
+    solver = GeneralSolver(objfn, method='CG')
+    hsi_data = solver.solve()
+    if constraint is not None:
+         hsi_data = constraint(hsi_data)
+    return hsi_data, wavelengths
+
+def rgb2hsi_L2_direct(rgb_raw: npt.NDArray): 
+    objfn = hsi_objfn(rgb_raw, False)
+    wavelengths = objfn.wavelengths
     A = objfn.op._M
     b = objfn.d
     hsi_data = direct_solve_reverse(A, b, 0.01)
-    # if constraint is not None:
-    #     hsi_data = constraint(hsi_data)
     return hsi_data, wavelengths
+
+def rgb2hsi_L2_L1bound(rgb_raw: npt.NDArray): 
+    objfn = hsi_objfn(rgb_raw, False)
+    wavelengths = objfn.wavelengths
+    solver = BoundADMM.from_objfn(objfn, 0.01, 0.1, 100, lower=0, upper=1)
+    hsi_data = solver.solve()
+    return hsi_data, wavelengths
+
+def rgb2hsi(rgb_raw: npt.NDArray, solver: str = "direct"): 
+    
+    if solver == "direct":
+        return rgb2hsi_L2_direct(rgb_raw)
+    elif solver == "L2_bound":
+        return rgb2hsi_L2(rgb_raw, True)
+    elif solver == "L1_bound":
+        return rgb2hsi_L2_L1bound(rgb_raw)
+    else:
+        return rgb2hsi_L2(rgb_raw, False)
