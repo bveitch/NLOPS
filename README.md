@@ -75,6 +75,7 @@ $$
 $$ 
 
 ![Rosenbruck](examples/rosenbrock/Newton_solve.png)
+
 *Rosenbrock function with global miniumum at (1.0,1.0). Blue crosses show iterates of Newton's method, starting from (-1.5,-0.5).*
 
 #### HSI
@@ -104,6 +105,7 @@ $$
 This and other approaches are investigated in ```hsi_reconstruct.py```. 
 
 ![HSIReconstruction](examples/hsi/astronaut_spectra.png)
+
 *Reconstructed spectra at various point of an RGB image. `Direct` refers to a direct solve of the least-squares data fitting term, whilst `L1-bound` solves the bound constrained problem under an L1 norm.*
 
 #### Euler-Maruyama
@@ -117,6 +119,7 @@ where $W_t$ is a Wiener process. From a signal processing perspective this is in
 I experimented with the Euler-Maruyama method as it is the simplest numerical method to evaluate such SDEs. 
 
 ![RandomWalk](examples/euler_maruyama/random_walk.png)
+
 *Simulated random walks. Blue starting at 1.0 at t=0.0s. Other walks are simulated at $t=0.25s$ and $t=0.75s$ respectively.*
 
 The link to inverse problems is currently incomplete. This is due to a mix of time constraints, lazyness and technical details. However, given noisy data, $d(t)$, the task is to fit $x(t)$ to $d$ to determine $\mu$ and $\sigma$. On the technical side, I need to learn a little more about Kolmogorov's forward and backward equation. To be continued.
@@ -139,6 +142,7 @@ $$
 In short $S \to I \to R$, $\alpha$ says how infectious the epidemic is whilst $\beta$ is the rate of recovery. 
 
 ![SIRMod](examples/sir/sir_mod.png)
+
 *Evolution of susceptible, infective and removed compartments with time. Values are plotted as a fraction of the total population. Here $\alpha$=0.23 and $\beta=0.11$*
 
 There is alot more to say here, better models of epidemics are SEIR which includes an exposed phase (infected, not yet infectious), or SIRS which allows immunity to slacken over time so that $R$ falls back to $S$. For COVID19 one can allow multiple infectious compartments where the infectivity and recovery functions vary depending on how long someone has had the disease.
