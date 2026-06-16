@@ -1,5 +1,6 @@
 # NLOPS : General purpose solver for nonlinear L1/L2 inverse problems
 A Python package for solving constrained inverse problems of the form\
+
 $$
 m^{*}=\argmin_m \left[\|d - g(m)\|_2^2 + \lambda R(m)\right],
 $$
