@@ -55,7 +55,7 @@ Sums of objectives are defined in ```sum_objective.py```,
 ### Solvers
 Once an objective object is defined we can solve the corresponding inverse problem
 ```math
-m^{*}=\argmin_m \left[\mathcal{L}(m)\right].
+m^{*}=\textrm{argmin}_m \left[\mathcal{L}(m)\right].
 ```
  - ```general.py``` provides ```GeneralSolver``` wrapping Scipy's minimize library https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html. Providing easy access to NLCG and BFGS algorithms. 
  - ```direct.py``` solvers the inverse problem via a Cholesky decomposition of the Hessian. This approach is not appropriate for large scale problems.
@@ -119,11 +119,15 @@ An example from epidemic modelling.  By splitting a population into three compar
  - $R$ - removed, immune or deceased, 
  
 an epidemic can be modelled as a differential equation describing the evolution of the population through these categories. In maths,
-```math
+
+$$
 \partial_t S = -\alpha S I, \\
+
 \partial_t I = \alpha S I - \beta R, \\
+
 \partial_t R = \beta R.
-```
+$$
+
 In short $S \to I \to R$, $\alpha$ says how infectious the epidemic is whilst $\beta$ is the rate of recovery. There is alot more to say here, better models of epidemics are SEIR which includes an exposed phase (infected, not yet infectious), or SIRS which allows immunity to slacken over time so that $R$ falls back to $S$. For COVID19 one can allow multiple infectious compartments where the infectivity and recovery functions vary depending on how long someone has had the disease.
 
 From an inverse problems point of view we can pose the problem of regularly sampling say 10% of the population to estimate $\widehat{I}_t$. Then fit a modelled $I_t$ to $\widehat{I}_t$ in order to get the parameters $I_0, \alpha, \beta$. This will then determine the course of the epidemic. This of course owes alot to events happening in the world when I first started planning this library!  This is a highly nonlinear inverse problem which is explored in ```sir_inference.py```.
