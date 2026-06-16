@@ -1,9 +1,8 @@
 # NLOPS : General purpose solver for nonlinear L1/L2 inverse problems
 A Python package for solving constrained inverse problems of the form\
-
-$$
+```math
 m^{*}=\argmin_m \left[\|d - g(m)\|_2^2 + \lambda R(m)\right],
-$$
+```
 where $d$ represents the recorded data, m is the (usually physical) model, $g$ is a simulation of the data and $R$ is an arbitrary regularization constraint on the model. $\lambda$ is a scalar and represents the regularization weight. Amongst the classical choices for $R$ are,\
 $$
 R(m) = \| m - m_0\|_2^2 
