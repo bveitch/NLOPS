@@ -86,7 +86,7 @@ F_{R,G,B}: \lambda \to d_{R,G,B}.
 ```
 We can determine the full spectral data, $m_{\lambda}$, by solving the inverse problem,
 ```math
-\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 \hspace{0.3cm} \textrm{(L2}.  
+\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 \hspace{0.3cm} \textrm{(L2)}.  
 ```
 However, this problem is highly underdetermined and so extra constraints are required. Furthermore, in applications one is typically interested in an objects reflectance which is strictly bounded between $0$ and $1$. Since an object cannot reflect less than no energy, or more energy than fell on it! 
 
