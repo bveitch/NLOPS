@@ -92,9 +92,9 @@ However, this problem is highly underdetermined and so extra constraints are req
 
 There are a number of ways of enforcing such a reflectance constraint, for instance, solving
 ```math
-\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 + \lambda \| R(m_{\lambda}) \|_1 \hspace{0.3cm} \textrm{(L1_bound)}. 
+\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 + \lambda \| R(m_{\lambda}) \|_1 \hspace{0.3cm} \textrm{(L1-bound)}. 
 ```
-where\
+where
 ```math
 R(m) = \begin{cases}
 - m,  \hspace{0.2cm} \textrm{for} \hspace{0.2cm} m < 0,\\
