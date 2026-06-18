@@ -42,15 +42,15 @@ Various operator objects can be constructed as,
  - ```symbolic.py``` : Wraps sympy expressions into operator consistent format- powerful but slow
 
 ### Objectives
-The main objective object is the L2 fit, defined in ```base.py```,\
+The main objective object is the L2 fit, defined in ```base.py```,
 ```math
 \mathcal{L}: m \to \mathbb{R} \hspace{0.2cm} \textrm{where} \hspace{0.2cm} \mathcal{L} = \|d - g(m)\|_2^2.
 ```
 Any implemented objective must calculate both a value, $\mathcal{L}$,  and its gradient, $\nabla \mathcal{L}$, where
 ```math
 \nabla L_i = \frac{\partial \mathcal{L}}{\partial m_i}.
-``` 
-Sums of objectives are defined in ```sum_objective.py```,\
+```
+Sums of objectives are defined in ```sum_objective.py```,
 ```math
 \mathcal{L} = \mathcal{L}_0 + \mathcal{L}_1 + \ldots + \mathcal{L}_m.
 ```
@@ -136,7 +136,9 @@ an epidemic can be modelled as a differential equation describing the evolution 
 
 ```math
 \partial_t S = -\alpha S I, \\
+
 \partial_t I = \alpha S I - \beta R, \\
+
 \partial_t R = \beta R.
 ```
 In short $S \to I \to R$, $\alpha$ says how infectious the epidemic is whilst $\beta$ is the rate of recovery. 
