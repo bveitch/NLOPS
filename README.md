@@ -114,7 +114,7 @@ At present these are modelling illustrations rather than actual inverse problems
 ```math
 \Delta x(t) = \mu(x,t) x(t) \Delta t + \sigma(x,t) \Delta W_t,
 ```
-where $W_t$ is a Wiener process. From a signal processing perspective this is interesting as it provides a very general noise model. It is also important in financial mmathematics (generally) and portfolio modelling.
+where $W_t$ is a Wiener process. From a signal processing perspective this is interesting as it provides a very general noise model. It is also important in financial mathematics (generally) and portfolio modelling.
 
 I experimented with the Euler-Maruyama method as it is the simplest numerical method to evaluate such SDEs. 
 
