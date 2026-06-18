@@ -86,13 +86,13 @@ F_{R,G,B}: \lambda \to d_{R,G,B}.
 ```
 We can determine the full spectral data, $m_{\lambda}$, by solving the inverse problem,
 ```math
-\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2. 
+\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 \hspace{0.3cm} \textrm{(L2}.  
 ```
 However, this problem is highly underdetermined and so extra constraints are required. Furthermore, in applications one is typically interested in an objects reflectance which is strictly bounded between $0$ and $1$. Since an object cannot reflect less than no energy, or more energy than fell on it! 
 
 There are a number of ways of enforcing such a reflectance constraint, for instance, solving
 ```math
-\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 + \lambda \| R(m_{\lambda}) \|_1. 
+\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 + \lambda \| R(m_{\lambda}) \|_1 \hspace{0.3cm} \textrm{(L1_bound)}. 
 ```
 where\
 ```math
@@ -106,7 +106,7 @@ This and other approaches are investigated in ```hsi_reconstruct.py```.
 
 ![HSIReconstruction](examples/hsi/astronaut_spectra.png)
 
-*Reconstructed spectra at various point of an RGB image. `Direct` refers to a direct solve of the least-squares data fitting term, whilst `L1-bound` solves the bound constrained problem under an L1 norm.*
+*Reconstructed spectra at various point of an RGB image. `Direct` refers to a direct solve of the least-squares data fitting term (L2), whilst `L1-bound` solves the bound constrained problem under an L1 norm.*
 
 #### Euler-Maruyama
 
