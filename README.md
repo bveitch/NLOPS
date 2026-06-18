@@ -120,7 +120,7 @@ I experimented with the Euler-Maruyama method as it is the simplest numerical me
 
 ![RandomWalk](examples/euler_maruyama/random_walk.png)
 
-*Simulated random walks. Blue starting at 1.0 at t=0.0s. Other walks are simulated at $t=0.25s$ and $t=0.75s$ respectively.*
+*Simulated random walks. Blue starting at 1.0 at t=0.0s. Other walks are simulated at t=0.25s and t=0.75s respectively.*
 
 The link to inverse problems is currently incomplete. This is due to a mix of time constraints, lazyness and technical details. However, given noisy data, $d(t)$, the task is to fit $x(t)$ to $d$ to determine $\mu$ and $\sigma$. On the technical side, I need to learn a little more about Kolmogorov's forward and backward equation. To be continued.
 
