@@ -1,15 +1,17 @@
 # NLOPS : General purpose solver for nonlinear L1/L2 inverse problems
-A Python package for solving constrained inverse problems of the form,
+A Python package for solving constrained inverse problems of the form
+
 ```math
 m^{*}=\textrm{argmin}_m \left[\|d - g(m)\|_2^2 + \lambda R(m)\right],
 ```
-where $d$ represents the recorded data, m is the (usually physical) model, $g$ is a simulation of the data and $R$ is an arbitrary regularization constraint on the model. $\lambda$ is a scalar and represents the regularization weight. Amongst the classical choices for $R$ are,
+where $d$ represents the recorded data, m is the (usually physical) model, $g$ is a simulation of the data and $R$ is an arbitrary regularization constraint on the model. $\lambda$ is a scalar and represents the regularization weight. Amongst the classical choices for $R$ are,\
+
 ```math
-R(m) = \| m - m_0\|_2^2 
+R(m) = \| m - m_0\|_2^2, 
 ```
 corresponding to Tykhonov regularization. Other choices are,
 ```math
-R(m) = \| m \|_1 
+R(m) = \| m \|_1, 
 ```
 corresponding to the generalized Lasso penalty functon, and total-variation denoising,
 ```math
@@ -70,7 +72,11 @@ Examples are illustrated through notebooks. Varying levels of sophistication.
 Simplest example which uses Sympy to evaluate Newton's method to find the global minimum, at (1,1), of the Rosenbruck function
 ```math
 \mathcal{J} = (1-x)^2 + 100.0*(y-x^2)^2.
-```
+``` 
+
+![Rosenbruck](examples/rosenbrock/Newton_solve.png)
+
+*Rosenbrock function with global miniumum at (1.0,1.0). Blue crosses show iterates of Newton's method, starting from (-1.5,-0.5).*
 
 #### HSI
 
@@ -80,13 +86,13 @@ F_{R,G,B}: \lambda \to d_{R,G,B}.
 ```
 We can determine the full spectral data, $m_{\lambda}$, by solving the inverse problem,
 ```math
-\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2. 
+\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 \hspace{0.3cm} \textrm{(L2)}.  
 ```
 However, this problem is highly underdetermined and so extra constraints are required. Furthermore, in applications one is typically interested in an objects reflectance which is strictly bounded between $0$ and $1$. Since an object cannot reflect less than no energy, or more energy than fell on it! 
 
 There are a number of ways of enforcing such a reflectance constraint, for instance, solving
 ```math
-\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 + \lambda \| R(m_{\lambda}) \|_1. 
+\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 + \lambda \| R(m_{\lambda}) \|_1 \hspace{0.3cm} \textrm{(L1-bound)}. 
 ```
 where
 ```math
@@ -98,6 +104,10 @@ m -1, \hspace{0.2cm} \textrm{for} \hspace{0.2cm} m > 1.
 ```
 This and other approaches are investigated in ```hsi_reconstruct.py```. 
 
+![HSIReconstruction](examples/hsi/astronaut_spectra.png)
+
+*Reconstructed spectra at various point of an RGB image. `Direct` refers to a direct solve of the least-squares data fitting term (L2), whilst `L1-bound` solves the bound constrained problem under an L1 norm.*
+
 #### Euler-Maruyama
 
 At present these are modelling illustrations rather than actual inverse problems. The point is to model data according to some Stochastic differential equation,
@@ -107,6 +117,10 @@ At present these are modelling illustrations rather than actual inverse problems
 where $W_t$ is a Wiener process. From a signal processing perspective this is interesting as it provides a very general noise model. It is also important in financial mmathematics (generally) and portfolio modelling.
 
 I experimented with the Euler-Maruyama method as it is the simplest numerical method to evaluate such SDEs. 
+
+![RandomWalk](examples/euler_maruyama/random_walk.png)
+
+*Simulated random walks. Blue starting at 1.0 at t=0.0s. Other walks are simulated at $t=0.25s$ and $t=0.75s$ respectively.*
 
 The link to inverse problems is currently incomplete. This is due to a mix of time constraints, lazyness and technical details. However, given noisy data, $d(t)$, the task is to fit $x(t)$ to $d$ to determine $\mu$ and $\sigma$. On the technical side, I need to learn a little more about Kolmogorov's forward and backward equation. To be continued.
 
@@ -118,7 +132,8 @@ An example from epidemic modelling.  By splitting a population into three compar
  - $I$ - infective, 
  - $R$ - removed, immune or deceased, 
  
-an epidemic can be modelled as a differential equation describing the evolution of the population through these categories. In maths,
+an epidemic can be modelled as a differential equation describing the evolution of the population through these compartments. In maths,
+
 ```math
 \partial_t S = -\alpha S I, \\
 
@@ -126,7 +141,13 @@ an epidemic can be modelled as a differential equation describing the evolution 
 
 \partial_t R = \beta R.
 ```
-In short $S \to I \to R$, $\alpha$ says how infectious the epidemic is whilst $\beta$ is the rate of recovery. There is alot more to say here, better models of epidemics are SEIR which includes an exposed phase (infected, not yet infectious), or SIRS which allows immunity to slacken over time so that $R$ falls back to $S$. For COVID19 one can allow multiple infectious compartments where the infectivity and recovery functions vary depending on how long someone has had the disease.
+In short $S \to I \to R$, $\alpha$ says how infectious the epidemic is whilst $\beta$ is the rate of recovery. 
+
+![SIRMod](examples/sir/sir_mod.png)
+
+*Evolution of susceptible, infective and removed compartments with time. Values are plotted as a fraction of the total population. Here $\alpha$=0.23 and $\beta=0.11$*
+
+There is alot more to say here, better models of epidemics are SEIR which includes an exposed phase (infected, not yet infectious), or SIRS which allows immunity to slacken over time so that $R$ falls back to $S$. For COVID19 one can allow multiple infectious compartments where the infectivity and recovery functions vary depending on how long someone has had the disease.
 
 From an inverse problems point of view we can pose the problem of regularly sampling say 10% of the population to estimate $\widehat{I}_t$. Then fit a modelled $I_t$ to $\widehat{I}_t$ in order to get the parameters $I_0, \alpha, \beta$. This will then determine the course of the epidemic. This of course owes alot to events happening in the world when I first started planning this library!  This is a highly nonlinear inverse problem which is explored in ```sir_inference.py```.
 
