@@ -138,7 +138,7 @@ an epidemic can be modelled as a differential equation describing the evolution 
 \partial_t S = -\alpha S I, \\
 \partial_t I = \alpha S I - \beta R, \\
 \partial_t R = \beta R.
-``
+```
 In short $S \to I \to R$, $\alpha$ says how infectious the epidemic is whilst $\beta$ is the rate of recovery. 
 
 ![SIRMod](examples/sir/sir_mod.png)
