@@ -1,7 +1,7 @@
 # NLOPS : General purpose solver for nonlinear L1/L2 inverse problems
 
 ## Purpose 
-This package was written as a set of lightweight codes to explore inverse problems across general scientific domains. The emphasis is on fast prototyping and data exploration within the python ecosystem. It is designed to provide modular object-oriented design patterns with clear separation of forward and adjoint modelling calls, objective functions and solvers with a strong _test-first_ discipline.
+This package was written as a set of lightweight tools to explore inverse problems across general scientific domains. The original idea stemmed from my early industrial experience around 2010 when i started calling others Fortran code as a modelling engine from inside a MATLAB which provided the solver architecture. It is designed to provide modular object-oriented design patterns with clear separation of forward and adjoint modelling calls, objective functions and solvers with a strong _test-first_ discipline.
 
 ## Description
 A Python package for solving constrained inverse problems of the form
@@ -155,16 +155,16 @@ From an inverse problems point of view we can pose the problem of regularly samp
 ## C++ operator support with Pybind11
  
 ### What
-[Pybind11](https://pybind11.readthedocs.io/en/stable/index.html) is a lightweight header-only library that exposes C++ types in Python and vice versa. Amongst the main advantages to using Pybind11 over its competitors are ease of use and that it supports modern C++ (> C++11) and the STL. In this project I have explored the use of Pybind11 as a means to bind and call small C++ libraries in Python.
+[Pybind11](https://pybind11.readthedocs.io/en/stable/index.html) is a lightweight header-only library that exposes C++ types in Python and vice versa. Amongst the main advantages to using Pybind11 over its competitors are ease of use and that it supports modern C++ (C++11 or later) and the STL. In this project I have explored the use of Pybind11 as a means to bind and call small C++ operators into a scipy solver.
  
 ### Why bother
-Python is becoming increasingly popular as a generic scientific programming language. I enjoy using it exploration and prototyping. C++ on the other hand offers more direct memory management and therefore a potential increase in efficiency. Being able to combine the two is a useful functionality for inverse problems, operator calls and performing simple algebraic calculations on their results is the task of the solver. These calculations are implemented in many python libraries, eg [scipy](https://docs.scipy.org/doc/scipy-1.17.0/reference/generated/scipy.optimize.minimize.html). The operators themselves can be heavy tasks requiring multiple nodes and threads. This is often the case in PDE constrained inversion. These calculations possibly should be performed in C++.
+Python is becoming increasingly popular as a generic scientific programming language. I enjoy using it for data exploration and prototyping. C++ on the other hand offers direct memory management and therefore a potential increase in efficiency. Being able to combine the two is a useful functionality for inverse problems; calling operators and performing simple algebraic calculations on their results is the task of the numerical solver. These calculations are implemented in many python libraries, eg [scipy](https://docs.scipy.org/doc/scipy-1.17.0/reference/generated/scipy.optimize.minimize.html). The operators themselves can be heavy tasks requiring multiple nodes and threads. This is often the case in PDE constrained inversion. These calculations possibly should be performed in C++. Another use case is where a key image processing step exists in python an efficient adjoint implementation does not exist. 
  
 ### Why not bother
 There is a serious risk of rebuilding the wheel worse than it is already built elsewhere. Many Python libraries already have efficient code built in C/C++ underneath. Check first that what you need doesn't already exist!
  
 #### Example
-In `src/operators/src` I provide a C++ matrix operator suite with openmp support.
+In `src/operators/src` I provide a C++ matrix operator suite with openmp support. The Python wrapper itself can be found in  `src/operators/matrix_cpp.py`
 **_NOTE_** Unless the matrix is too large to fit into memory this is almost certainly a case of rebuilding the wheel, as numpy handles this structure well using fast C routines. However, as an illustrative example it serves a purpose 
 #### Installation
 ```
@@ -198,6 +198,7 @@ A very simple solver test calling the C++ operators is found at `tests/test_solv
 - Consolidate solver into general Polymorphic class.
 
 ### Technical
+- Add an image deblurring example eg. using Total Variation denoising
 - Performance testing on cpp bindings
 - More complete constraint handling in ```admm.py```
 - Multi-stage SIR, SEIR model. Improve results with additional $\widehat{R}$ dataset.
