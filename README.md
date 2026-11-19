@@ -151,12 +151,47 @@ There is alot more to say here, better models of epidemics are SEIR which includ
 
 From an inverse problems point of view we can pose the problem of regularly sampling say 10% of the population to estimate $\widehat{I}_t$. Then fit a modelled $I_t$ to $\widehat{I}_t$ in order to get the parameters $I_0, \alpha, \beta$. This will then determine the course of the epidemic. This of course owes alot to events happening in the world when I first started planning this library!  This is a highly nonlinear inverse problem which is explored in ```sir_inference.py```.
 
+## C++ operator support with Pybind11
+ 
+### What
+[Pybind11](https://pybind11.readthedocs.io/en/stable/index.html) is a lightweight header-only library that exposes C++ types in Python and vice versa. Amongst the main advantages to using Pybind11 over its competitors are ease of use and that it supports modern C++ (> C++11) and the STL. In this project I have explored the use of Pybind11 as a means to bind and call small C++ libraries in Python.
+ 
+### Why bother
+Python is becoming increasingly popular as a generic scientific programming language. I enjoy using it exploration and prototyping. C++ on the other hand offers more direct memory management and therefore a potential increase in efficiency. Being able to combine the two is a useful functionality for inverse problems, operator calls and performing simple algebraic calculations on their results is the task of the solver. These calculations are implemented in many python libraries, eg [scipy](https://docs.scipy.org/doc/scipy-1.17.0/reference/generated/scipy.optimize.minimize.html). The operators themselves can be heavy tasks requiring multiple nodes and threads. This is often the case in PDE constrained inversion. These calculations possibly should be performed in C++.
+ 
+### Why not bother
+There is a serious risk of rebuilding the wheel worse than it is already built elsewhere. Many Python libraries already have efficient code built in C/C++ underneath. Check first that what you need doesn't already exist!
+ 
+#### Example
+In `src/operators/src` I provide a C++ matrix operator suite with openmp support. 
+ 
+#### Installation
+```
+pip install -e ./src/operators/cpp_matrix_operator
+```
+
+> [NOTE!] Due to problems with ```clang``` on Apple Darwin which doesnt port with openmp, you will need to use gcc compiler (simplest) or install llvm to use clang. 
+- If using `gcc`
+```bash
+brew install gmp
+brew install openmp
+```
+- If using `clang`
+```bash
+brew install gmp
+brew install openmp
+brew install llvm
+```
+#### Running the tests
+Operator tests are found at `tests/test_operators.py`
+A very simple solver test calling the C++ operators is found at `tests/test_solvers.py`
+
 ## ToDo
 ### Software improvements
 - Docstrings!
 - Ruff, mypy and coverage tests
+- Move to Quarto for jupyer notebooks and publishing
 - Consolidate solver into general Polymorphic class.
-- C++ operator support. See https://github.com/bveitch/CPPY for how this can be done.
 
 
 ### Technical
@@ -174,7 +209,5 @@ conda activate nlops
 ```
 ## Running tests
 ```
-pytest src/objectives/tests/test_objectives.py
-pytest src/operators/tests/test_operators.py
-pytest src/solvers/tests/test_solvers.py
+pytest tests
 ```
