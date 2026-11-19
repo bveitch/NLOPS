@@ -1,3 +1,7 @@
+import os
+import sys
+# Adds the parent directory of 'src' to the search path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 import numpy as np
 import numpy.testing as npt

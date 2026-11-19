@@ -1,0 +1,21 @@
+[project]
+name = "matrix_operator_cpp"
+version = "0.1.0"
+authors= [{name="bveitch"}]
+#dependenices = ["pybind11"]
+
+[build-system]
+requires = [ 
+    "scikit-build-core>=0.3.0",
+    "cmake>=3.12",
+    "pybind11"
+]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+wheel.packages = ["matrix_operator_cpp"]
+cmake.build-type = "Release"
+
+[tool.scikit-build.env]
+CC = "/opt/homebrew/bin/gcc-15"
+CXX = "/opt/homebrew/bin/g++-15"
