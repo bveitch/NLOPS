@@ -1,15 +1,20 @@
 # NLOPS : General purpose solver for nonlinear L1/L2 inverse problems
+
+## Purpose 
+This package was written as a set of lightweight codes to explore inverse problems across general scientific domains. The emphasis is on fast prototyping and data exploration within the python ecosystem. It is designed to provide modular object-oriented design patterns with clear separation of forward and adjoint modelling calls, objective functions and solvers with a strong _test-first_ discipline.
+
+## Description
 A Python package for solving constrained inverse problems of the form
 
 ```math
 m^{*}=\textrm{argmin}_m \left[\|d - g(m)\|_2^2 + \lambda R(m)\right],
 ```
-where $d$ represents the recorded data, m is the (usually physical) model, $g$ is a simulation of the data and $R$ is an arbitrary regularization constraint on the model. $\lambda$ is a scalar and represents the regularization weight. Amongst the classical choices for $R$ are,
+where $d$ represents the recorded data, $m$ is the (usually physical) model, $g$ is a simulation of the data and $R$ is an arbitrary regularization constraint on the model. $\lambda$ is a scalar and represents the regularization weight. Amongst the classical choices for $R$ are,
 
 ```math
 R(m) = \| m - m_0\|_2^2, 
 ```
-corresponding to Tykhonov regularization. Other choices are,
+corresponding to Tikhonov regularization. Other choices are,
 ```math
 R(m) = \| m \|_1, 
 ```
@@ -20,8 +25,7 @@ R(m) = \| \nabla m\|_1.
 Many more interesting examples can be found at https://web.stanford.edu/~boyd/papers/pdf/admm_distr_stats.pdf
 
 ## Functionality
-Source code has been subdivided into three folders, ```operators```, ```objectives``` and ```solvers```. Each has their own test barage formulated through the pytest framework.
-
+Source code has been subdivided into three folders, ```operators```, ```objectives``` and ```solvers```. Each has their own tests formulated through the pytest framework. 
 ### Operators
 An operator is a general map, g, 
 ```math
@@ -63,21 +67,18 @@ m^{*}=\textrm{argmin}_m \left[\mathcal{L}(m)\right].
  - ```direct.py``` solvers the inverse problem via a Cholesky decomposition of the Hessian. This approach is not appropriate for large scale problems.
  - ```admm.py```. Neither of theses approaches is valid for L1 regularizers. To this end we supply an ADMM solver.
 
+## Tests
+Operators are tested for adjoint consistency (the dot-product test)
+```math
+<x, Ay> = <y, A^T x>
+```
+Whilst objective functions are tested for correctness in the numerical derivative,
+```math
+0.5*(J(m+ e * \Delta m) - J(m-e*\Delta m))= < \Delta m ,\nabla J(m) > + O(e^2).  
+```
 ## Examples
 
 Examples are illustrated through notebooks. Varying levels of sophistication.
-
-#### Rosenbruck
-
-Simplest example which uses Sympy to evaluate Newton's method to find the global minimum, at (1,1), of the Rosenbruck function
-```math
-\mathcal{J} = (1-x)^2 + 100.0*(y-x^2)^2.
-``` 
-
-![Rosenbruck](examples/rosenbrock/Newton_solve.png)
-
-*Rosenbrock function with global miniumum at (1.0,1.0). Blue crosses show iterates of Newton's method, starting from (-1.5,-0.5).*
-
 #### HSI
 
 Hyperspectral reconstruction over the visible spectrum from RGB data. Given three channel data (R, G, B) and a knowledge of the spectral response function for each channel,
@@ -92,9 +93,9 @@ However, this problem is highly underdetermined and so extra constraints are req
 
 There are a number of ways of enforcing such a reflectance constraint, for instance, solving
 ```math
-\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 + \lambda \| R(m_{\lambda}) \|_1 \hspace{0.3cm} \textrm{(L1-bound)}. 
+\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 + \lambda  R(m_{\lambda})  \hspace{0.3cm} \textrm{(L1-bound)}. 
 ```
-where
+where $R$ denotes the box-penalty constraint,
 ```math
 R(m) = \begin{cases}
 - m,  \hspace{0.2cm} \textrm{for} \hspace{0.2cm} m < 0,\\
@@ -137,9 +138,9 @@ an epidemic can be modelled as a differential equation describing the evolution 
 ```math
 \partial_t S = -\alpha S I, \\
 
-\partial_t I = \alpha S I - \beta R, \\
+\partial_t I = \alpha S I - \beta I, \\
 
-\partial_t R = \beta R.
+\partial_t R = \beta I.
 ```
 In short $S \to I \to R$, $\alpha$ says how infectious the epidemic is whilst $\beta$ is the rate of recovery. 
 
@@ -163,8 +164,8 @@ Python is becoming increasingly popular as a generic scientific programming lang
 There is a serious risk of rebuilding the wheel worse than it is already built elsewhere. Many Python libraries already have efficient code built in C/C++ underneath. Check first that what you need doesn't already exist!
  
 #### Example
-In `src/operators/src` I provide a C++ matrix operator suite with openmp support. 
- 
+In `src/operators/src` I provide a C++ matrix operator suite with openmp support.
+**_NOTE_** Unless the matrix is too large to fit into memory this is almost certainly a case of rebuilding the wheel, as numpy handles this structure well using fast C routines. However, as an illustrative example it serves a purpose 
 #### Installation
 ```
 pip install -e ./src/operators/cpp_matrix_operator
@@ -190,11 +191,14 @@ A very simple solver test calling the C++ operators is found at `tests/test_solv
 ### Software improvements
 - Docstrings!
 - Ruff, mypy and coverage tests
+- Github actions and CI/CD
+- Unfied pyproject.toml for pybind11 installation
+- Retire conda environment
 - Move to Quarto for jupyer notebooks and publishing
 - Consolidate solver into general Polymorphic class.
 
-
 ### Technical
+- Performance testing on cpp bindings
 - More complete constraint handling in ```admm.py```
 - Multi-stage SIR, SEIR model. Improve results with additional $\widehat{R}$ dataset.
 - Link Euler-Maruyama to inverse problems for market calibration.
