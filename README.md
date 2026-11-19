@@ -1,7 +1,7 @@
 # NLOPS : General purpose solver for nonlinear L1/L2 inverse problems
 
 ## Purpose 
-This package was written as a set of lightweight tools to explore inverse problems across general scientific domains. The original idea stemmed from my early industrial experience around 2010 when i started calling others Fortran code as a modelling engine from inside a MATLAB which provided the solver architecture. It is designed to provide modular object-oriented design patterns with clear separation of forward and adjoint modelling calls, objective functions and solvers with a strong _test-first_ discipline.
+This package was written as a set of lightweight tools to explore inverse problems across general scientific domains. The original idea stemmed from my early industrial experience around 2010 when i started calling others Fortran code as a modelling engine from inside MATLAB which provided the solver and signal processing architecture. It is designed to provide modular object-oriented design patterns with clear separation of forward and adjoint modelling calls, objective functions and solvers with a strong _test-first_ discipline.
 
 ## Description
 A Python package for solving constrained inverse problems of the form
