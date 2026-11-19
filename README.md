@@ -164,7 +164,7 @@ Python is becoming increasingly popular as a generic scientific programming lang
 There is a serious risk of rebuilding the wheel worse than it is already built elsewhere. Many Python libraries already have efficient code built in C/C++ underneath. Check first that what you need doesn't already exist!
  
 #### Example
-In `src/operators/src` I provide a C++ matrix operator suite with openmp support. The Python wrapper itself can be found in  `src/operators/matrix_cpp.py`
+In `src/operators/src` I provide a C++ matrix operator suite with openmp support. The Python wrapper itself can be found in `src/operators/matrix_cpp.py`
 **_NOTE_** Unless the matrix is too large to fit into memory this is almost certainly a case of rebuilding the wheel, as numpy handles this structure well using fast C routines. However, as an illustrative example it serves a purpose 
 #### Installation
 ```
