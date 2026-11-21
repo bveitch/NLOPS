@@ -87,13 +87,13 @@ F_{R,G,B}: \lambda \to d_{R,G,B}.
 ```
 We can determine the full spectral data, $m_{\lambda}$, by solving the inverse problem,
 ```math
-\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 \hspace{0.3cm} \textrm{(L2)}.  
+\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 \hspace{0.3cm} \textrm{(L2)}.
 ```
 However, this problem is highly underdetermined and so extra constraints are required. Furthermore, in applications one is typically interested in an objects reflectance which is strictly bounded between $0$ and $1$. Since an object cannot reflect less than no energy, or more energy than fell on it! 
 
 There are a number of ways of enforcing such a reflectance constraint, for instance, solving
 ```math
-\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 + \lambda  R(m_{\lambda})  \hspace{0.3cm} \textrm{(L1-bound)}. 
+\mathcal{J}=\|d_{RGB} - F_{RGB} m_{\lambda}\|_2^2 + \lambda  R(m_{\lambda})  \hspace{0.3cm} \textrm{(L1-bound)}.
 ```
 where $R$ denotes the box-penalty constraint,
 ```math
@@ -111,7 +111,7 @@ This and other approaches are investigated in ```hsi_reconstruct.py```.
 
 #### Euler-Maruyama
 
-At present these are modelling illustrations rather than actual inverse problems. The point is to model data according to some Stochastic differential equation,
+At present these are modelling illustrations rather than actual inverse problems. The point is to model data according to some stochastic differential equation,
 ```math
 \Delta x(t) = \mu(x,t) x(t) \Delta t + \sigma(x,t) \Delta W_t,
 ```
@@ -216,3 +216,26 @@ conda activate nlops
 ```
 pytest tests
 ```
+## Hypocritical Test Driven Deveopment: An approach for developing lightweight research code
+I have perhaps over-emphasized the importance of testing. I have seen various reactions to 
+this approach. 'Great in principle but we dont have time for that now', 
+'Or cant you just show me a working prototype' have sometimes been the reaction. 
+Others have wanted to discuss in detail the idea of test driven development within research code. 
+So, to preempt a wider debate I include here a few cents. 
+
+Firstly, I get the problem. In scientific research we are not concerned with tracking a users requirements still less with ensuring that a code is bug free and always satisfies these. There is no user, there is not yet even a product. Instead, we operate under the scientific method whereby we formulate a hypothesis and rigorously test that and only that. For development that means we want the simplest prototype which ensures whether the research can continue or whather it should be stopped. Under this perspective the critics are correct; testing whether a code is bug free against every obscure edge case is a distraction and a waste of time. Worse, the uncertainities of the real world make the idea of writing a comprehensive test first nigh on impossible.
+
+However, I would argue that a developer of scientific code is pushed toward some version of TDD precisely because the world is a messy and uncertain place. Hard experience has told me there are countless reasons why my code fails. One is that the idea is nonsense and must be abandoned immediately. Another is that ones idea was brilliant but there was an obvious bug in a script which made it fail. Yet another is that the idea was very sensible the code is pretty decent too, but it failed to achieve good results because of some subtlety in the interaction of the model with the data. Indeed, the space of possible outcomes is quite possibly uncountable! A single throw away script, does the developer a disservice since underneath the mess there may be a nugget of gold which is worth keeping.
+
+With this in mind I outline a revised form of TDD,
+    
+- **_Build._** Implemented a targeted piece of the model. Keep it simple (stupid!). An operator, objective function or solver. Write a targeted test. Flag difficult edge cases but resists the temptation to test all of them.
+- **_Test._** Test against accepted benchmarks, known analytical solutions, or just expected behaviour.
+- **_Assess._** Why did the method pass? Will it succeed on harder data, what about real data? Does the code need a quick refactor? Can we ignore weird edge cases or will they come back to kill us?
+- **_Advance._** Decide on the next target and move forward.
+
+This is hypocritical for several resons. Firstly, it is not pure TDD. Secondly, it allows one to be lazy. I am not sure I honestly follow my own advice, I find it very easy to be pulled back into over refactoring at the assessment stage. When it works well I think the real strength of this method is not as a management tool for code developement. It is more of a tool for managing ones own belief. As I suggest above it is easy to get disheartened when what was thought to be a good idea hasnt panned out. HTDD allows you to capture an intermediate beachhead which you can come back to when the real problem is better understood.  
+
+
+
+

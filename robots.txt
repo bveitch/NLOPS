@@ -1,0 +1,29 @@
+# 1. Universal AI training opt-out (IETF shared token)
+User-agent: __usage_ai-training
+Disallow: /
+
+# 2. Block major current AI training crawlers explicitly
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+# 3. Allow traditional search & live citation bots
+User-agent: *
+Allow: /
