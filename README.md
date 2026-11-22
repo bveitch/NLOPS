@@ -217,15 +217,17 @@ conda activate nlops
 pytest tests
 ```
 ## Hypocritical Test Driven Deveopment: An approach for developing lightweight research code
-I have perhaps over-emphasized the importance of testing. I have seen various reactions to 
-this approach. 'Great in principle but we dont have time for that now', 
-'Or cant you just show me a working prototype' have sometimes been the reaction. 
-Others have wanted to discuss in detail the idea of test driven development within research code. 
-So, to preempt a wider debate I include here a few cents. 
+In this README I have perhaps over-emphasized the importance of _testing_ or a _test-first_ philosophy. 
+Reactions to this approach have varied. 'Great in principle but we dont have time for that now', 'Thats R&E not R&D' or
+'cant you just show me a working prototype'. Others have wanted to discuss in detail the idea of test driven development within research code. To preempt a wider debate I include here my two cents. 
 
-Firstly, I get the problem. In scientific research we are not concerned with tracking a users requirements still less with ensuring that a code is bug free and always satisfies these. There is no user, there is not yet even a product. Instead, we operate under the scientific method whereby we formulate a hypothesis and rigorously test that and only that. For development that means we want the simplest prototype which ensures whether the research can continue or whather it should be stopped. Under this perspective the critics are correct; testing whether a code is bug free against every obscure edge case is a distraction and a waste of time. Worse, the uncertainities of the real world make the idea of writing a comprehensive test first nigh on impossible.
+Firstly, I get the problem. In scientific research we are not concerned with tracking a users requirements still less with ensuring that a code is bug free, meets a specified failure rate or hard-time guarantee. There is no user, there is not yet even a product! Instead, we operate under the scientific method whereby we formulate a hypothesis and test that and only that. For development that means we want the simplest prototype which ensures whether the research can continue or whether it should be stopped. Under this perspective the critics are correct; testing whether a code is bug free against every obscure edge case is a distraction and a waste of time. Worse, the uncertainities of the real world make the idea of writing a comprehensive test first nigh on impossible.
 
-However, I would argue that a developer of scientific code is pushed toward some version of TDD precisely because the world is a messy and uncertain place. Hard experience has told me there are countless reasons why my code fails. One is that the idea is nonsense and must be abandoned immediately. Another is that ones idea was brilliant but there was an obvious bug in a script which made it fail. Yet another is that the idea was very sensible the code is pretty decent too, but it failed to achieve good results because of some subtlety in the interaction of the model with the data. Indeed, the space of possible outcomes is quite possibly uncountable! A single throw away script, does the developer a disservice since underneath the mess there may be a nugget of gold which is worth keeping.
+I argue that a developer of scientific code is pushed toward some version of TDD precisely because the world is a messy and uncertain place. 
+
+- Hard experience has told me there are countless (even uncountable) reasons why my code fails. One is that the original idea was nonsense and must be abandoned immediately. Another is that ones idea was brilliant but there was an obvious bug in a script which made it fail. Yet another is that the idea was very sensible, the code is pretty decent too, but it failed to achieve good results because of some subtlety in the interaction of the model with the data. 
+- Viewing research code as a single throw-away script, does the developer a disservice since underneath the mess there may be a nugget of gold which is worth keeping. 
+- In the field of inverse problems, solvers are complex things. Many distinct parts must be correct before they can work well. Hence, some consideration of engineering design is necessary.
 
 With this in mind I outline a revised form of TDD,
     
@@ -234,7 +236,7 @@ With this in mind I outline a revised form of TDD,
 - **_Assess._** Why did the method pass? Will it succeed on harder data, what about real data? Does the code need a quick refactor? Can we ignore weird edge cases or will they come back to kill us?
 - **_Advance._** Decide on the next target and move forward.
 
-This is hypocritical for several resons. Firstly, it is not pure TDD. Secondly, it allows one to be lazy. I am not sure I honestly follow my own advice, I find it very easy to be pulled back into over refactoring at the assessment stage. When it works well I think the real strength of this method is not as a management tool for code developement. It is more of a tool for managing ones own belief. As I suggest above it is easy to get disheartened when what was thought to be a good idea hasnt panned out. HTDD allows you to capture an intermediate beachhead which you can come back to when the real problem is better understood.  
+This is hypocritical for several resons. Firstly, it is not pure TDD. Secondly, it allows one to be lazy. I am not sure I honestly follow my own advice, I find it very easy to be pulled back into over-refactoring at the assessment stage. When it works well I think the real strength of this method is not as a coding best practice. It is more of a tool for managing ones own belief and maintaining momentum. As I suggest above it is easy to get disheartened when what was thought to be a good idea hasnt panned out. HTDD allows you to capture an intermediate beachhead which you can come back to when the real problem is better understood.  
 
 
 
