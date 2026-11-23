@@ -43,7 +43,8 @@ Various operator objects can be constructed as,
  - ```matrix.py``` : Matrices (Linear Operators) 
  - ```chain.py``` : Nonlinear-chains, $g=g_1 \circ g_2 \circ \ldots \circ g_m$
  - ```vector.py``` : Vectors, $g = [g_1 , g_2 , \ldots , g_m]$
- - ```symbolic.py``` : Wraps sympy expressions into operator consistent format- powerful but slow
+ - ```symbolic.py``` : Wraps sympy expressions into operator consistent format - powerful but slow
+ - ```matrix_cpp.py``` : Wraps C++ operators into python callable. See `C++ operator support with Pybind11`
 
 ### Objectives
 The main objective object is the L2 fit, defined in ```base.py```,
