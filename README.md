@@ -205,6 +205,9 @@ A very simple solver test calling the C++ operators is found at `tests/test_solv
 - Multi-stage SIR, SEIR model. Improve results with additional $\widehat{R}$ dataset.
 - Link Euler-Maruyama to inverse problems for market calibration.
 
+### Research
+Deep sparse prior learning and Network unrolling [notes](notes/ML_IP2.pdf)
+
 ## Installation
 ```
 conda env create -f environment.yml

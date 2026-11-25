@@ -1,0 +1,603 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath}
+\usepackage{amsfonts} 
+\usepackage{hyperref}
+\usepackage{enumitem}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\trace}{tr}
+\DeclareMathOperator*{\soft}{soft}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    citecolor=green,
+    pdfpagemode=FullScreen,
+    }
+\newcommand{\bibTitle}[1]{``#1''}
+\begin{document}
+\title{Machine Learning in Inverse Problems}
+\author{B.H. Veitch}
+\maketitle
+\section{Introduction}
+These notes outline recipes for combining methods of machine learning with traditional inverse problems to improve reconstruction performance. In general terms this could be achieved by,
+\begin{itemize}
+\item Training an ML to replicate the solution of an inverse problem. Typically this could take the form of providing a sequence of data and model pairs and fitting these inside the constraints of the original inverse problem. After training, the `prediction` task would amount to the reconstruction model produced by the pretrained network when run on a sample dataset. This would lead to an improvement in reconstruction time when the network runtime was less than the cost of a direct solution. 
+\item Training an ML to uncover some prior structure of the training data. Most inverse problems are underconstrained meaning the model (solution) space is larger than the data space. Having an accurate estimate of the prior model can lead to a significant improvement in reconstruction quality. If the prior structure can be sufficiently encapsulated by the network, and the training set captured sufficient features of the real world then this would lead to an improvement in reconstruction quality. 
+\end{itemize}
+
+In this set of notes I describe three architectures to address the above. I shall assume that we are provided a set of model-data pairs, $\{m,d\}$. Having access to both the model and the data helps constrain the Network fitting and aids learning. However, it is important to note that in real world applications having access to $m$ may be impossible and a self-supervised approach is then required, see \cite{tachella}. The proposed models break into three paradigms,
+\begin{description}
+\item[\textit{Fully supervised}] \label{case:learned} Fit a neural network to $\{m,d\}$. Reconstruction is simple, running the network on $d$ should simulate the model, $m$. This approach is described in section \ref{sec:learned}. This is simple and computationally very efficient. However, reconstruction quality should decline if the sensing matrix,
+\begin{equation}
+\Phi: m \to d,
+\end{equation} becomes inaccurate. It should also have the most sensitivity to the training data meaning it struggles to generalize.  
+\item[\textit{Variational learning}] \label{case:vae} This approach is described in section \ref{sec:varinf}; see also \cite{vae} and \cite{bora}. This section describes a mathematical method to learn a distribution which fits a latent distribution $z$ given $(m,d)$ pairs (section \ref{sec:vae_prior}). This method should have limited robustness to the sensing matrix as that is baked into the training just as it was in the fully supervised case. However, as a distribution is being learned for the underlying posterior it should have less sensitivity to the training data. This might prove to be more true for the case of the latent distribution as this allows for the detection of a data noise model depending on the hidden $z$.  
+\item[\textit{Network unrolling}] \label{case:unrolling} Tune the network architecture to simulate the iterative steps of an inverse problem. This approach is described in section \ref{sec:unrolling} as well as \cite{monga}, \cite{admmnet} and \cite{lista}. This method is less efficient since each layer of the network replicates an iteration of the inverse problem, and there can be many iterates. However, it should have  a weaker sensitivity to changes in the sensing matrix. Incorporating the action of the sensing matrix into the network may help reduce over-fitting.
+
+\end{description}   
+I begin in section \ref{sec:foundation} by formulating the basic details of inverse problems. I describe the link to Bayesian theory in section \ref{sec:bayes} through the maximum a posteriori estimate. I return to the above suspicions in the discussion section, \ref{sec:discuss}.
+
+\subsection{Notation}
+\begin{center}
+\begin{tabular}{ c | c | c}
+ Symbol & Description & Shape \\
+ \hline 
+ $d$ & Data  & $|d|$ \\  
+ $m$ & Model & $|m|$ \\
+ $\Phi$ & Sensing Matrix & $(|m|, |d|)$\\
+ $R$    & Regularizer  & \\
+ $\theta, (\phi)$    & Decoder (encoder) weights & \\
+ $ K $ & Number of samples & \\ 	 
+ $\mathcal{J}$ & Data misfit & \\
+ $\mathcal{L}$ & Training loss & \\ 
+ $ f, g $ & Neural networks & \\
+ $ \mu, \sigma$ & Mean and variance of Gaussian & 
+\end{tabular}
+\end{center}
+
+\subsection{Inverse problem formulation}\label{sec:foundation}
+The typical inverse problem consists of determining a model, $m$, from a set of data, $d$, where $d$ can be simulated from $m$ by a sensing matrix,
+\begin{equation}
+d=\Phi m + \epsilon.\label{eqn:formulate_d}
+\end{equation}
+In this form, a solution can be determined in principle from the normal equations,
+\begin{equation}
+m_{*}=(\Phi^T\Phi)^{-1}\Phi^T d.
+\end{equation}
+In practice this approach can stumble over a number of hurdles, such as
+\begin{itemize}
+\item $\Phi$ can be large and even impossible to store in memory on a single computer. In which case, without assuming specific structure on the Hessian, $\Phi^T\Phi$ computation of the inverse Hessian is intractable. In practice, this difficulty is not insurmountable, more specialized solvers such as Conjugate-Gradient or L-BFGS can handle this case, provided computation of $\Phi$ and $\Phi^T$ is tractable.
+\item Ill-conditioning. Even in small cases, the matrix $\Phi^T\Phi$ can be poorly conditioned, manifested in the Hessian having zero valued eigenvalues. Now a true inverse does not exist. We avoid this problem by adding constraints to the inversion, a typical example is to add a damping parameter,
+\begin{equation}
+m_{*}=(\Phi^T\Phi+\lambda I)^{-1}(\Phi^T d+\lambda m_0).\label{eqn:balanced}
+\end{equation}
+This can stabilize the inversion.
+\item Constraining the inversion is equivalent to solving a regularized least-squares problem, such as,
+\begin{equation}
+m_{*}= \argmin_{m} \left[\frac{1}{2}\| d - \Phi m\|_2^2+ \|W_{m}(m-m_0) \|_2^2\ \right].\label{eqn:genL2}
+\end{equation}
+and in particular, equation \ref{eqn:balanced} is equivalent to the Tikhonov problem,
+\begin{equation}
+m_{*}= \argmin_{m} \left[\frac{1}{2}\| d - \Phi m\|_2^2+\frac{\lambda}{2}  \|m-m_0 \|_2^2 \right].\label{eqn:tykhonov}
+\end{equation}
+This shows the difficulty, how does one know what the correct constraint is? Tikhonov regularization will damp the action of the Hessian, and incorporating a smoothness constraint will bias the solution towards smooth models. This might not be what we want!
+\item Constraints can require additional steps and changes to solver architecture to be computed robustly, e.g. the L1 norm is not differentiable at the origin.
+\end{itemize}
+\subsection{Bayesian formulation and the role of priors}\label{sec:bayes}
+Constraints can also be interpreted as a prior knowledge of the model. Under Bayes' rule, the likelihood of the joint data and model can be expressed as,
+\begin{equation}
+p(d,m)=p(d | m) p(m).\label{eqn:jointdistr}
+\end{equation}
+Given this, we can determine the likelihood of the data by marginalization,
+\begin{equation}
+p(d)=\int_m p(d|m)p(m) dm.\label{eqn:datadistr}
+\end{equation}
+If,  
+\begin{enumerate}
+\item \label{assum:noise_normal} The noise term, $\epsilon$, is normally distributed, 
+\begin{equation}
+\epsilon \sim \mathcal{N}(0, \sigma_d).
+\end{equation}
+\item \label{assum:prior_normal} The model is sampled from a Normal distribution,
+\begin{equation}
+m \sim \mathcal{N}(0, \sigma_m),
+\end{equation}
+\end{enumerate}
+then, 
+\begin{align}
+p(d | m) &= \frac{1}{\sigma_d \sqrt{2 \pi}}\exp{\left( -\frac{\|d-\Phi m\|_2^2}{2\sigma_d^2}\right)},\nonumber \\
+p(m)& = \frac{1}{\sigma_m \sqrt{2 \pi}}\exp{\left( -\frac{\|m\|_2^2}{2\sigma_m^2}\right)},
+\end{align}
+Under assumptions \ref{assum:noise_normal} and \ref{assum:prior_normal}, computing the log-likelihood of the data is neatly tractable,
+\begin{equation}
+\log {p(d,m)}=-\frac{1}{2\sigma_d^2}\|d-\Phi m\|_2^2-\frac{1}{2\sigma_m^2}\|m\|_2^2-|d|\log{\sigma_d}-|m|\log{\sigma_m}.\nonumber
+\end{equation}
+Finding the model which maximizes this log-posterior (MAP) is equivalent to minimizing the objective function,
+\begin{equation}
+\mathcal{J}=\frac{1}{2\sigma_d^2}\|d-\Phi m\|_2^2+\frac{1}{2\sigma_m^2}\|m\|_2^2.\nonumber
+\end{equation}
+This is equivalent to the Tikhonov problem \ref{eqn:tykhonov} with $\lambda = \sigma_d^2/\sigma_m^2$.
+This formulation can be generalized in many ways;  assuming multidimensional Gaussians for the noise and prior (the latter being equivalent to \ref{eqn:genL2}); assuming Laplacian distributed prior which generates an L1 regularization, assuming Poisson distributed signal, e.g. number of hits on a detector; general linear models for the data dependence on the model. 
+ 
+\subsection{An initial training loss}\label{sec:bayes_training}
+To motivate later sections of these notes, imagine we have acquired a set of size $K$ of model-data pairs $\{ m^{k},d^{k}; k \in [K]\}$. We want to fit a distribution to this data and then use the knowledge of that distribution to guide a reconstruction algorithm. For this a simple assumption is,
+\begin{align}
+p(d|m) & \sim \mathcal{N}(\Phi m , \Sigma_d), \\
+p(m) & \sim \mathcal{N}(\mu_m ,\Sigma_m).
+\end{align} 
+The log-joint probability is,
+\begin{equation}
+\log{  p(m,d)} = \log{p(d|m)}+\log{p(m)},
+\end{equation} 
+and so,
+\begin{align}
+\log{ p(m,d)} =& -\frac{1}{2}\sum_{k} \left[\|d^k-\Phi m^k\|_{\Sigma_d^{-1}}^2+\|m^k-\mu_m\|_{\Sigma_m^{-1}}^2\right] \nonumber\\
+&- \frac{K}{2}\log{|\Sigma_d|} - \frac{K}{2}\log{|\Sigma_m|}
+\end{align}
+where $\|\cdot \|_{Q}$ denotes the Mahalanobis norm,
+\begin{equation}
+\|x\|_{Q}=\sqrt{x^T Qx}.
+\end{equation}
+This defines the loss function,
+\begin{align}
+\mathcal{L}&=\frac{1}{2}\sum_{k} \left[\|d^k-\Phi m^k\|_{\Sigma_d^{-1}}^2+\|m^k-\mu_m\|_{\Sigma_m^{-1}}^2\right] \nonumber\\
+&+ \frac{K}{2}\log{|\Sigma_d|} + \frac{K}{2}\log{|\Sigma_m|}.
+\end{align}
+The goal of `training' here is to minimize $\mathcal{L}$ to determine the parameters, $\mu_m, \Sigma_m, \Sigma_d$. This is analytically tractable and we find that,
+\begin{align}
+\frac{\partial \mathcal{L}}{\partial \mu_m}&=\Sigma_m^{-1}(\sum_k m^k - K \mu_m),\\
+\frac{\partial \mathcal{L}}{\partial \Sigma_m^{-1}}&=\sum_k (m^k-\mu_m)(m^k-\mu_m)^T-K\Sigma_m,\\
+\frac{\partial \mathcal{L}}{\partial \Sigma_d^{-1}}&=\sum_k (d^k-\Phi m^k)(d^k-\Phi m^k)^T-K\Sigma_d.
+\end{align}
+At the minimum these three gradients are zero, and we have found,
+\begin{align}
+\mu_m &= \mathbb{E}[m],\\
+\Sigma_m & =\mathbb{E}[(m-\mu_m)(m-\mu_m)^T],\\
+\Sigma_d & = \mathbb{E}[(d-\Phi m)(d-\Phi m)^T].
+\end{align}
+This intuitive result just says that $\mu_m$ is the average of the $m$ measurements, $\Sigma_m$ is the covariance of $m$, whilst $\Sigma_d$ is the covariance of the data residual. This represents the simplest version of what we could call `supervised learning' for the reconstruction problem. Once $\mu_m$, $\Sigma_m$, $\Sigma_d$ have been computed for the training set $\{m, d\}$ (a trivial task!), we reconstruct $m$ from a new $d$ measurement by minimizing,
+\begin{equation}
+\mathcal{J}=\frac{1}{2} \| W_d(d - \Phi m) \|_2^2 +\frac{1}{2} \|W_m(m-\mu_m)\|_2^2.\label{eqn:basic_recon}
+\end{equation}
+Here $W_d$ and $W_m$ represent the Cholesky factors of $\Sigma_d^{-1}$ and $\Sigma_m^{-1}$ respectively. We will return to a generalization of this approach using variational autoencoders in section \ref{sec:varinf}. 
+\section{Supervised learning}\label{sec:learned}
+Most generally we are interested in an inverse problem of the form,
+\begin{equation}
+\mathcal{J}=\frac{1}{2}\| d - \Phi m\|_2^2+R(m).\label{eqn:gen_constraint}
+\end{equation}
+Given a set of candidate ${(m, d)}$ pairs, a supervised learning approach to reconstructing the minimizer of equation \ref{eqn:gen_constraint} is to pose a model prediction as a function of $d$ and a set of pretrained weights $\theta$,
+\begin{equation}
+m=g_{\theta}(d).
+\end{equation}
+A suitable training misfit for this could then be,
+\begin{equation}
+\mathcal{L}(\theta| {m,d})=\frac{1}{2}\|m-g_{\theta}(d)\|_2^2+\frac{1}{2}\|d-\Phi g_{\theta}(d)\|_2^2. \label{eqn:initial_train}
+\end{equation}
+The first term on the RHS of \ref{eqn:initial_train} is the standard training loss which ensures that the predicted model matches the training model. The second term is a faithfulness constraint, ensuring that the action of $\Phi$ on the predicted model matches the training data.  We note that the regularizer $R$ is missing from \ref{eqn:initial_train}; there seems no harm in including it, if an effective prior is known. The problem is that usually we do not know what such a prior should be.
+
+\section{Variational Inference models}\label{sec:varinf}
+Inverse problems are an obvious candidate for variational inference. Returning to the probabilistic approach in section \ref{sec:bayes} Bayes' rule says that,
+\begin{equation}
+p(m | d)=\frac{p(d | m) p(m)}{p(d)},\label{eqn:Bayes_pmd}
+\end{equation}   
+where 
+\begin{equation}
+p(d)=\int_m p(d|m)p(m) dm,
+\end{equation}
+as in equation \ref{eqn:datadistr}. As it stands this is intractable. However, variational approaches can help us in two ways. Firstly, we can pose a functional form for the posterior distribution $m|d$, parametrized by a neural network, or otherwise. By fitting this to a set of measurements for $\{m,d\}$ we can learn an efficient decoder. Obviously, this approach is very similar to that of section \ref{sec:learned}. In reality, the maths turns into quite a mess so I have decided not to report the formulation here. 
+  
+Building upon this a second approach  is to find a hidden `latent' variable distribution which fits the joint distribution $p(m,d)$. This is a natural extension of the methodology presented in section \ref{sec:bayes_training}. We find that this leads to the derivation of an auto-encoder, where the encoder maps $(m,d)$ to the latent variable $z$ and the decoder maps $z$ to $m$. A worked derivation is given in section \ref{sec:vae_prior}. A key point to note is that whilst the latent variable adds more expressibility to the model, and allows the inclusion of noise terms depending on $z$, it adds significant complexity to the reconstruction, see \cite{bora} and equation \ref{eqn:min_z_given_d}. This is because it is necessary to fit the latent space to $d$ in order to reconstruct the model $m|z$. 
+%\subsection{Posterior learning}\label{sec:posterior}
+% As it stands this is intractable, we would have to assume a distribution for $m$ and performing the integral is difficult. However, we note that,
+%\begin{equation}
+%p(d)=\mathbb{E}_{m'\sim m} p(d|m'),
+%\end{equation}
+%that is by drawing candidate samples $m'$ from an assumed distribution on $m$ we can compute $p(d)$ via a Monte-Carlo method. This is progress but it still isn't what we want 
+%as we don't really know $m$ as a distribution (we just have some samples). We want to sample $m'$ from some estimated distribution depending on the data  $d$. So let us assume that
+%\begin{equation}
+%m' \sim q(d).
+%\end{equation}
+%Now,
+%\begin{equation}
+%\log{p(d)}=\log{\mathbb{E}_{m'\sim q} \left( \frac{p(d|m')p(m)}{q(m|d)}\right)},
+%\end{equation}
+%Jensen's inequality,
+%\begin{equation}
+%\log(\mathbb{E}[x]) \ge \mathbb{E}[\log(x)],\nonumber
+%\end{equation}
+%leads us to consider the Evidence lower bound (ELBO) for the data, $d$, see \cite{vae} for fuller details,
+%\begin{equation}
+%\mathcal{L}_{d}=\int_{m' \sim q(m | d)} \log{\left(\frac{p(d|m')p(m')}{q(m'|d)}\right)}.\label{eqn:varbound}
+%\end{equation}
+%As an aside, we see that \ref{eqn:varbound} can also be written,
+%\begin{equation}
+%\mathcal{L}_{d}=\log{p(d)}+\int_{m' \sim q(m | d)} \log{\left(\frac{p(m'|d)}{q(m|d)}\right)}.
+%\end{equation}
+%So, when $q\to p(m|d)$, $\mathcal{L}_d \to \log{p(d)}$ and we recover the unknown posterior distribution. Returning to equation \ref{eqn:varbound} we re-write this in terms of the KL-divergence,
+%\begin{equation}
+%\mathcal{L}_d=\mathbb{E}_{m' \sim q}\log {p(d| m')}-D_{KL}[q(m| d)\|p(m)].
+%\end{equation} 
+%This formula is analytically tractable. We pose distributions for $q$ and $p$ whose parameters must be learned by fitting the data,
+%\begin{align}
+%m & \sim \mathcal{N}(\mu_m,\Sigma_m),\label{eqn:m_distr}\\
+%q_\theta & \sim \mathcal{N}(\mu_{\theta}(d), \sigma_{\theta}(d)),\label{eqn:q_distr}\\
+%p(d |m) & \sim \mathcal{N}(\Phi m, I) \label{eqn:pdm_distr}.
+%\end{align}
+%This leads to the cumbersome formula for the data ELBO,
+%\begin{align}
+%\mathcal{L}_d&=-\frac{1}{2}\mathbb{E}_{m' \sim q_{\theta}(d)}\|d-\Phi m'\|_2^2+ \nonumber \\
+%&-\frac{1}{2}\left[\mathrm{tr}(\Sigma_{m}^{-1}\sigma _{\theta})+(\mu_{\theta}-\mu_m)^{\top }\Sigma_{m}^{-1}(\mu _{\theta}-\mu_m)-k+\log \left(\frac{|\Sigma_{m}|}{|\sigma _{\theta}|}\right)\right]
+%\end{align}
+%Taking logarithms of Bayes' rule \ref{eqn:Bayes_pmd},
+%\begin{equation}
+%\log{p(m|d)}=\log{p(d |m)} +\log{p(m)}-\log{p(d)}.
+%\end{equation}
+%When $q \to p(m|d)$, we have,
+%\begin{equation}
+%\log{p(d |m)} +\log{p(m)}-\mathcal{L}_d \to \log{q}.
+%\end{equation}
+%This leads us to define the training loss function,
+%\begin{equation}
+%\mathcal{L}=-\log{q(m|d)} +\log{p(d |m)} +\log{p(m)}-\mathcal{L}_d.
+%\end{equation}
+%We need logarithms of the distributions \ref{eqn:m_distr}, \ref{eqn:q_distr} and \ref{eqn:pdm_distr},
+%\begin{align}
+%\log{p(m)}&=-\frac{1}{2} \sum_{K} ( m^{(k)} - \mu_m )^{T}\Sigma_m^{-1} (m^{(k)} - \mu_m)-\frac{K}{2}\log{|\Sigma_m|}-\frac{K|m|}{2}\log{2\pi},\\
+%\log{q(m|d)}&=-\frac{1}{2} \sum_{K} \| m^{(k)} - \mu_{\theta}(d^{(k)})\|_2^2-\frac{K}{2}\log{|\sigma _{\theta}|}-\frac{K|m|}{2}\log{2\pi},\\
+%\log{p(d|m)}&=\textrm{const.}
+%\end{align}
+%Putting all this together gives us the training loss,
+%\begin{align}
+%\mathcal{L}(\theta)=&\frac{1}{2} \sum_{K} \| m^{(k)} -\mu_{\theta}(d^{(k)})\|_2^2+\frac{1}{2}\mathbb{E}_{m' \sim q_{\theta}(d)}\|d^{(k)}-\Phi m'\|_2^2\nonumber \\
+%+&\frac{1}{2}\left[\mathrm{tr}(\Sigma_{m}^{-1}\sigma _{\theta}(d^{(k)})+(\mu_{\theta}(d^{(k)})-\mu_m)^{\top }\Sigma_{m}^{-1}(\mu _{\theta}(d^{(k)})-\mu_m)\right]
+%%-&\frac{1}{2} \sum_{K} ( m^{(k)} - \mu_m )^{T}\Sigma_m^{-1} (m^{(k)} - \mu_m)\nonumber\\
+%%+&\frac{K-1}{2}\log \left(\frac{|\sigma_{\theta}|}{|\Sigma_m|}\right).
+%\end{align}
+%%We can project out the training sensitivity to $\mu_m$ and $\Sigma_m$ since,
+%%\begin{equation}
+%%\frac{\partial \mathcal{L}}{\partial \mu_m}=\Sigma_{m}^{-1}\left(\Sigma_{k}m^{k}-(K-1)\mu_m-\mu_{\theta}\right).
+%%\end{equation}
+%%So at the minimum,
+%%\begin{equation}
+%%\mu_m=\frac{\Sigma_{k}m^{k}-\mu_{\theta}}{K-1}=\frac{K\mu_0-\mu_{\theta}}{K-1}.
+%%\end{equation}
+%%Also, 
+%%\begin{align}
+%%\left[\frac{\partial \mathcal{L}}{\partial \Sigma_m^{-1}}\right]_{ij}=&\frac{1}{2} \left[(\mu_{\theta}-\mu_m)_i(\mu_{\theta}-\mu_m)_j \right]\nonumber\\
+%%-&\frac{1}{2} \sum_{K} ( m^{(k)} - \mu_m )_i(m^{(k)} - \mu_m)_j +\frac{\sigma_{\theta,i}\delta_{ij}}{2} \nonumber\\
+%%+&\frac{K-1}{2}\Sigma_m,
+%%\end{align}
+%%where i have used the Jacobi formula,
+%%\begin{equation}
+%%\nabla_A(\log {|A|})=\frac{1}{|A|}\times \nabla_A(|A|)=\frac{1}{|A|}\times |A| A^{-T}=A^{-T}.
+%%\end{equation}
+%%So at the minimum,
+%%\begin{equation}
+%%\Sigma_m=\frac{1}{K-1} \left[K \Sigma_{0} -(\mu_{\theta}-\mu_m)(\mu_{\theta}-\mu_m)^{T}-\sigma_{\theta}\right].
+%%\end{equation}
+%This means we only need to learn the parameters $\theta$, under the `reparametrization' trick, we have,
+%\begin{align}
+%\mathcal{L}(\theta)=&\frac{1}{2} \sum_{K} \| m^{(k)} -\mu_{\theta}(d^{(k)})\|_2^2+\frac{1}{2}\mathbb{E}_{m'}\|d^{(k)}-\Phi (\mu_{\theta}+m'\sigma_{\theta})\|_2^2\nonumber \\
+%+&\frac{1}{2}\mathrm{tr}[W\sigma _{\theta}(d^{(k)})W^{T}]+\| W\left[\mu_{\theta}(d^{(k)})-\mu_m\right]\|_2^2.\label{eqn:varinfer_reparam}
+%\end{align}
+%where $m'$ is now drawn from $\mathcal{N}(0,1)$ and $W$, $W^T$ is the Cholesky decomposition of $\Sigma_{m}^{-1}$. Sampling $m'$ is still required in order to train $\sigma_{\theta}$ otherwise the distributional nature of things will be thrown out. In any case, we have reached a training loss function of the form,
+%\begin{equation}
+%\mathcal{L}(\theta)=\frac{1}{2} \| m^{(k)} -\mu_{\theta}\|_2^2+\frac{1}{2}\mathbb{E}_{m'}\|d^{(k)}-\Phi (\mu_{\theta}+m'\sigma_{\theta})\|_2^2
+%+ R(\theta).\label{eqn:varinfer_final}
+%\end{equation}
+%If we do discard $\sigma_{\theta}$ then equation \ref{eqn:varinfer_final} becomes virtually identical to \ref{eqn:initial_train} which helps justify that approach.
+%The nice thing here is that we can derive a training loss very similar to \ref{eqn:initial_train} but from the perspective of probability distributions rather than pure intuition.  
+%At reconstruction time we would simply decode,
+%\begin{equation}
+%m_{*}=\mu_{\theta}(d).
+%\end{equation}
+\subsection{Variational autoencoder for prior learning}\label{sec:vae_prior}
+The approach of \ref{sec:bayes_training} was satisfying in that it provided an easy derivation of a prior model and a data covariance term. However, in practice the distribution assumed for $m$ is likely to be too simple. To fix this we wish to make the prior model, $m$, depend on some hidden distribution $z$. The methods of this section jump from the diving board we provided in section \ref{sec:bayes_training}, however the dependence on the hidden $z$ will lead to the derivation of a variational autoencoder, see \cite{vae}. Given $\{m,d\}$ pairs, the joint-distribution is parametrised by
+\begin{equation}
+p(d, m)=\int_{z}p(\{d, m\}|z)p(z) dz.
+\end{equation}
+Due to the integral over $z$, finding a tractable expression for the log-likelihood is difficult. Progress is made by considering the Evidence lower bound, for any probability distribution $q$,
+\begin{align}
+\mathcal{L}&=\int_{z} q(z | \{d, m\}) \log{\left(\frac{p(\{d, m\},z)}{q(z | \{d, m\})}\right)},\nonumber\\
+&=\mathbb{E}_{z \sim q}\log {\left(\frac{p(d,m,z)}{q(z | \{d, m\})}\right)},
+\end{align}
+We can see from Jensen's inequality,
+\begin{equation}
+\log(\mathbb{E}[x]) \ge \mathbb{E}[\log(x)],\nonumber
+\end{equation}
+that,
+\begin{equation}
+\log(p(d, m)) \ge \mathcal{L}.\label{eqn:bound}
+\end{equation}
+Equation \ref{eqn:bound} explains why $\mathcal{L}$ is the `evidence lower bound', ELBO. However, it is instructive to approach the ELBO through the Kullback-Leibler divergence, 
+\begin{align}
+\mathcal{L}&=\mathbb{E}_{z \sim q}\log {\left(\frac{p(d,m, z)}{p(d, m)} \times \frac{p(d,m)}{q(z | \{d, m\})}\right)},\nonumber\\
+%&=\mathbb{E}_{q_{\phi}(z)}\log {\left(\frac{p(d,m,z)}{p(d,m)} \times \frac{p(d,m)}{q(z | \{d, m\})}\right)},\nonumber\\
+&=\mathbb{E}_{z \sim q}\log {\left(\frac{p(z  | \{d,m \}}{q(z | \{d, m\})} \times p(d,m)\right)},\nonumber\\
+&=-D_{KL}[q(z | \{d, m\})\|p(z|\{d,m\})]+\log {p(d,m)}.
+\end{align}
+This last equation tells us two things. Firstly, since the Kullback-Leibler divergence is non-negative, it establishes the bound we already established from Jensen's inequality. Secondly, it says the ELBO will converge to the log-likelihood when the distribution $q$ converges to the `posterior' distribution $ p(z|\{d,m\})$. In some ways, this doesn't help much as the posterior distribution is not known. Yet, this is the jumping off point for machine learning. If the posterior distribution can be recovered or `fitted' somehow from real world data we can then replicate the dependence.
+   
+We can interrogate the ELBO a little more,  
+\begin{align}
+\mathcal{L}(\phi)&=\mathbb{E}_{z' \sim q}\log {\left(\frac{p(d,m, z')}{p(z')} \times \frac{p(z')}{q(z | \{d, m\})}\right)},\nonumber\\
+%&=\mathbb{E}_{z' \sim q}\log{\left( p(\{d,m\}|z')\times \frac{p(z')}{q(z'| \{d, m\})}\right)},\nonumber\\
+&=\mathbb{E}_{z' \sim q}\log {p(\{d,m\}| z)}-D_{KL}[q(z| \{d, m\})\|p(z)].
+\end{align}
+This last term is analytically tractable. Furthermore, it allows us to parametrize the ELBO in such a way so that the sophisticated pattern-recognition and data fitting properties of neural networks allows us to fit a distribution to it. I will pose some distributions,
+\begin{align}
+z & \sim \mathcal{N}(0,1),\\
+q_\phi & \sim \mathcal{N}(\mu_{\phi}(\{d, m\}), \sigma_{\phi}(\{d, m\})),\\
+p(d|z) & \sim \mathcal{N}(\Phi \mu_{\theta}(z), \sigma_{\theta}(z) ),\\
+p(m|z) & \sim \mathcal{N}(\mu_{\theta}(z), I),\\
+p(\{d,m\}|z) & = p(d|z)p(m|z),
+\end{align}
+$\mu_{\phi}, \sigma_{\phi}, \mu_{\theta},  \sigma_{\theta}$ represent sufficiently expressive neural networks parametrized by trainable parameters $\theta$, $\phi$. The additional $\sigma_{\theta}$ may be useful as it provides a hidden `Gaussian' noise model.  With all this, the KL-divergence and the ELBO take a neat form.
+\begin{align}
+\mathcal{L}(\phi, \theta)&=-\frac{1}{2}\mathbb{E}_{z' \sim q}\left[ \left\|\frac{d-\Phi \mu_{\theta}(z')}{\sigma_{\theta}(z')}\right\|_2^2 
++ \|m- \mu_{\theta}(z')\|_2^2+ \log{|\sigma_{\theta}(z')|}\right] \nonumber\\
+&+\log{|\sigma_{\phi}(\{d, m\})|}-\frac{1}{2}\|\sigma_{\phi}(\{d, m\})\|_2^2-\frac{1}{2}\|\mu_{\phi}(\{d, m\})\|_2^2+\frac{1}{2}
+\end{align}
+Incorporating the `reparameterization' trick, we seek the minimum of,
+\begin{align}
+&\mathcal{L}(\phi, \theta)=\nonumber\\
+&\frac{1}{2}\sum_k\left[ 
+\left\|\frac{d-\Phi \mu_{\theta}(\eta+z_{k} \xi)}{\sigma_{\theta}(\eta+z_{k} \xi)}\right\|_2^2 
++ \|m- \mu_{\theta}(\eta+z_{k} \xi)\|_2^2
++ \log{|\sigma_{\theta}(\eta+z_{k} \xi)|}
+\right]\nonumber\\
+&-\log{|\xi_{\phi}|}+\frac{1}{2}\|\xi_{\phi}\|_2^2+\frac{1}{2}\|\eta_{\phi}\|_2^2. \label{eqn:Lphietaxi}
+\end{align}
+where $\eta = \mu_{\phi}(\{d, m\})$, $\xi = \sigma_{\phi}(\{d, m\})$ and $z_k$ are samples drawn form $\mathcal{N}(0,I)$. If we remove the $z$ sampling altogether, making the $\sigma_{\phi}$ dependence redundant, then equation \ref{eqn:Lphietaxi} reduces to the deterministic auto-encoder,
+\begin{equation}
+\mathcal{L}(\phi, \theta)=\left[\left\|\frac{d-\Phi \mu_{\theta}(\eta)}{\sigma_{\theta}(\eta)}\right\|_2^2 + \|m- \mu_{\theta}(\eta)\|_2^2 + \log{|\sigma_{\theta}(\eta)|}\right]+\|\eta\|_2^2 \label{eqn:Lphieta}
+\end{equation}
+Equation \ref{eqn:Lphieta} bears striking similarity to \ref{eqn:initial_train} and \ref{eqn:m_eta_dual} .
+\subsection{Interpretation as an autoencoder}
+\begin{itemize}
+\item $q_\phi$ is the encoder, it maps the $\{d,m\}$ to the latent space $z$,
+\begin{equation}
+q_{\phi}: \{d,m\} \to z
+\end{equation} 
+\item $\mu_{\theta}$ is the latent space decoder,
+\begin{equation}
+\mu_{\theta}: z \to m
+\end{equation} 
+\item $\sigma_{\theta}$ is the (optional) noise decoder,
+\begin{equation}
+\mu_{\theta}: z \to d
+\end{equation} 
+\item \textbf{Reconstruction}: we seek $m$ which maximizes $p(m|d)$. This is intractable as it currently stands. I will follow the procedure proposed by \cite{bora}. Given $d$ alone, we can find a latent $z$ which minimizes 
+\begin{equation}
+p(z|d) \propto p(d|z)p(z)
+\end{equation}
+Hence,
+\begin{equation}
+z_{*}=\argmin_z{\left(\left\|\frac{d-\Phi \mu_{\theta}(z)}{\sigma_{\theta}(z)}\right\|_2^2+\log{|\sigma_{\theta}(z)|}+\|z\|_2^2\right)}.\label{eqn:min_z_given_d}
+\end{equation} 
+This is a nonlinear inverse problem whose solution requires an appropriate solver, L-BFGS is one choice. Once we've solved for $z_{*}$, the minimizer of $m|z_{*}$ is,
+\begin{equation}
+m_{*}=\mu_{\theta}(z_*).
+\end{equation}
+\end{itemize}
+\subsection{Variational autoencoder for sparse prior learning}\label{sec:vae_sparse_prior}
+In section \ref{sec:vae_prior} we assumed a normal distribution for the prior distribution over $z$ and for $m|z$. We saw how this led to a classical L2 optimization problem for both training and reconstruction. Often in compressive sensing applications we want to impose some sparsity on the prior. For one, this is the meaning of `compressive', and secondly including this may give performance benefits. In this section, I show how this can be done. 
+I will pose some distributions,
+\begin{align}
+z & \sim \textrm{Laplace}(0,1),\\
+q_\phi & \sim \textrm{Laplace}(\mu_{\phi}, \sigma_{\phi}),\\
+p(d|z) & \sim \mathcal{N}(\Phi \mu_{\theta}(z), \sigma_{\theta}(z) ),\\
+p(m|z) & \sim \mathcal{N}(\mu_{\theta}(z), I),\\
+p(\{d,m\}|z) & = p(d|z)p(m|z),
+\end{align}
+As before, $\mu_{\phi}, \sigma_{\phi}, \mu_{\theta},  \sigma_{\theta}$ represent neural networks parametrized by $\theta$, $\phi$. We remark that for the Laplacian distribution of $q_{\phi}$ the variance $\sigma_{\phi}$ should be a single scalar. Assuming a Laplacian distribution in $m$ space changes the form of the KL-divergence. Now the ELBO is,
+\begin{align}
+\mathcal{L}(\phi, \theta)&=-\frac{1}{2}\mathbb{E}_{z' \sim q}\left[ \left\|\frac{d-\Phi \mu_{\theta}(z')}{\sigma_{\theta}(z')}\right\|_2^2 
++ \|m- \mu_{\theta}(z')\|_2^2+ \log{|\sigma_{\theta}(z')|}\right] \nonumber\\
+&+\log{\sigma_{\phi}}-\sigma_{\phi}\exp{(-|\mu_{\phi}|)}-\|\mu_{\phi}\|_1+1
+\end{align}
+As in section \ref{sec:vae_prior}, for a reconstruction we seek $m$ which maximizes $p(m|d)$. Following the procedure proposed by \cite{bora}. Given $d$ alone, we can find a latent $z$ which minimizes 
+\begin{equation}
+p(z|d) \propto p(d|z)p(z)
+\end{equation}
+Hence,
+\begin{equation}
+z_{*}=\argmin_z{\left(\left\|\frac{d-\Phi \mu_{\theta}(z)}{\sigma_{\theta}(z)}\right\|_2^2+\log{\sigma_{\theta}(z)}+\|z\|_1\right)}.\label{eqn:min_sparsez_given_d}
+\end{equation} 
+Finding $z_{*}$ is now quite a formidable task, being a nonlinear inverse problem with an L1 constraint. A specialist solver is required for this such as OWL-QN. Once we've solved for $z_{*}$, the minimizer of $m|z_{*}$ is straightforward,
+\begin{equation}
+m_{*}=\mu_{\theta}(z_*).
+\end{equation}
+However, its worth asking what the point is here. If we simply want to improve reconstruction time, then this approach which brings the challenge of solving \ref{eqn:min_sparsez_given_d} seems unlikely to make the cut.
+\section{General priors with network unrolling}\label{sec:unrolling}
+In section \ref{sec:learned} we posed a simple network to improve reconstruction performance by `training out' the data fitting constraint. By removing the costly L2 inversion this prioritises efficiency over reconstruction quality. In section \ref{sec:varinf} we looked at variational inference approaches. These are more akin to a class of mathematical methods than a concrete architecture. However, a range of training losses and reconstruction methods were derived. These ranged in complexity depending on the assumptions posed for the prior model. In section \ref{sec:vae_sparse_prior} we had a well defined method for learning sparse priors, however we were left with a thorny reconstruction task; solving \ref{eqn:min_sparsez_given_d}. 
+
+A final approach is network unrolling, which aims to train a network to solve the general reconstruction problem \ref{eqn:gen_constraint}, see \cite{monga}, \cite{lista} and \cite{admmnet}. Here, we are looking for the dual solution of,
+\begin{equation}
+\mathcal{J}(m,\eta, \xi) = \frac{1}{2}\| d - \Phi m\|_2^2 +\lambda R(\eta) +\xi^T(\eta - m)+\frac{\rho}{2}\|\eta -m\|_2^2. \label{eqn:m_eta_dual}
+\end{equation}
+The iterations of ADMM \cite{admm} are,
+\begin{align}
+m^{[k+1]}&=\argmin_{m} \mathcal{J}(m,\eta^{[k]},\xi^{[k]}),\label{eqn:m_iterate}\\
+\eta^{[k+1]}&=\argmin_{\eta} \mathcal{J}(m^{[k+1]},\eta, \xi^{[k]}),\label{eqn:etaR_iterate}\\
+\xi^{[k+1]}&=\xi^{[k]}+\rho(\eta^{[k+1]}-m^{[k+1]}),\label{eqn:xiR_iterate}
+\end{align} 
+Of these, equation \ref{eqn:m_iterate} is a classical regularized least-squares problem,
+\begin{equation}
+m^{[k+1]}=\left(\Phi^T\Phi + \rho I\right)^{-1}\left[\Phi^T d+\rho \eta^{[k]}+\xi^{[k]}\right].\label{eqn:m_update}
+\end{equation}
+Whereas the $\eta$-iterate (\ref{eqn:etaR_iterate}) is,
+\begin{equation}
+\eta^{[k+1]}=\argmin_{\eta} \left[\lambda R(\eta) +\xi^{[k]} + \frac{\rho}{2}\|\eta -m^{[k+1]}\|_2^2\right].
+\end{equation}
+This defines the proximal operator,
+\begin{equation}
+\eta^{[k+1]}=\mathrm{prox}_{(\lambda/\rho)R}(m^{[k+1]}-\xi^{[k]}/\rho).
+\end{equation}
+This means we seek an $\eta$ which is closest to $m$ whilst satisfying the constraint $R$. Usually, the purpose of $R$ would be to enforce a denoising constraint, e.g. total-variation denoising, but more generally we could pose a general network architecture taking $m^{[k+1]}$ as input and outputting $ \eta^{[k+1]}$. 
+\begin{equation}
+\eta^{[k+1]}=g(\theta^{[k+1]}, m^{[k+1]}).\label{eqn:Netakp1}
+\end{equation}
+with the training loss on the $[k+1]$th layer being,
+\begin{equation}
+\mathcal{L}^{[k+1]}(\theta^{[k+1]})=\frac{\rho}{2}\|m_{\textrm{true}}-\eta^{[k+1]}\|_2^2.\label{eqn:Lk_constraint}
+\end{equation}
+The aim is that $\eta^{[k+1]}$ is close to $m_{\textrm{true}}$ but has been denoised. With this $g$ would be reminiscent of a convolutional autoencoder, and with this an additional term on the latent space can be included into \ref{eqn:Lk_constraint}. Experience shows that the $m$ update, equation \ref{eqn:m_update}, can prove tricky to incorporate into a trainable network, as such it can prove beneficial to replace equation \ref{eqn:m_update} by the simpler heuristic,
+\begin{equation}
+m^{[k+1]}=\Phi^T d+\rho \eta^{[k]},
+\end{equation}
+or an ISTA update, see \cite{lista}
+\begin{equation}
+m^{[k+1]}=\eta^{[k]}-\alpha\Phi^T(\Phi\eta^{[k]}-d)).
+\end{equation}
+With this the network acting on the $m^{[k+1]}$ iterate , \ref{eqn:Netakp1}, is functioning as a form of thresholding on an undisclosed prior.
+
+\section{Discussion}\label{sec:discuss}
+The approaches outlined in sections \ref{sec:learned}, \ref{sec:varinf} and \ref{sec:unrolling} need comparing in a controlled trial with appropriately chosen training and validation datasets. In the absence of this, I will make some speculations on the comparative performance.
+\begin{description}
+\item[\textit{Fully supervised}, section \ref{sec:learned}] 
+In an underconstrained inverse problem there can be many models, $m$, which project to the same data, $d$. Therefore, however we train $g_{\theta}$ (as in equation \ref{eqn:initial_train}, or otherwise), $g_{\theta}(d)$ will always project to the $m$ closest to the one seen in its training data. Overfitting becomes a huge concern here. In addition, if $\Phi$ changes, $g_{\theta}(d)$ will always project to the $m$ closest to the one seen for some subtly different $d'$. Performance should drop off a cliff in this case.
+
+\item[\textit{Variational learning}, section \ref{sec:varinf}] 
+As noted, the model defined by equation \ref{eqn:Lphieta} is similar to a deterministic supervised case particularly when the variance model $\xi_{\phi}$ is thrown out. The performance should therefore be about the same as for `Fully supervised'. When the variational noise model $\sigma_{\theta}$ is thrown out then equation \ref{eqn:Lphieta} is almost exactly equation \ref{eqn:initial_train}.
+When variational sampling is introduced as in equation \ref{eqn:Lphietaxi} we have doubled network size by adding in the $\xi_{\phi}$ network. This may give an improvement in performance and the variational term should allow us to sample around the `space' of the training models more adequately. I would guess that if test models are chosen from \textbf{distributions} similar to those used in testing then performance will be stable. When differences are significant overfitting will become apparent. VAEs are also known to suffer from posterior collapse, there are techniques to address this. 
+
+\item[\textit{Network unrolling}, section \ref{sec:unrolling}] For blurring models (deblurring problems) the action of $\Phi$ and $\Phi^T$ remain relatively compact on $m$. Furthermore, $\Phi$ typically has a Toeplitz structure, or else is close to.  Therefore, it is quite possible that a convolutional network can cover the action of $\Phi$. This would limit the advantage of the extra unrolled architecture over the fully supervised case. Worse, by repeating the architecture sequentially we are increasing the network expressibility. Overfitting now becomes \textbf{more} of a concern especially on small datasets, rather than less as was suggested in the introduction. This suggests we need to tune network layers (iterations) to match data size as much as using them to improve convergence (as in ADMM). On the other hand, the action of $\Phi^{-1}$, as defined by equation \ref{eqn:m_iterate}, is typically not compact even if $\Phi$ is, and in which case adding the pseudo-inverse may improve performance. If $\Phi$ is well known, but changes between training and test runs, then I could imagine that performance could be stable to that.
+\end{description}  
+
+We summarize this hypothesized performance in table \ref{table:comparison}. This shows a hypothetical comparison of results for the supervised network model, section \ref{sec:learned}, Variational inference \ref{sec:varinf} and unrolled network \ref{sec:unrolling}  as sensing matrix accuracy and prior knowledge changes.
+\begin{table}[h]
+\centering
+\begin{tabular}{| c | c || c | c | c |}
+\hline
+Accurate sensing & Accurate prior & Supervised & Variational & Unrolled \\ \hline
+$\checkmark$ & $\checkmark$ & $\checkmark$ &  $\checkmark$ & $\checkmark$  \\
+$\times$ & $\checkmark$ & $\times\times$ & $\times$ & $\checkmark$   \\
+$\checkmark$  & $\times$ & $\times\times$ & $\checkmark$ & $\times$  \\
+$\checkmark$  & $\times\times$ & $\times\times$ & $\times\times$ & $\times\times$ \\
+\hline
+\end{tabular}
+\caption{Hypothesized performance of ML architectures against sensing matrix accuracy and knowledge of the prior model. $\checkmark$ ($\times$) symbolizes good (poor) performance. To be tested!}\label{table:comparison}
+\end{table}
+\section{Testing} 
+We need to decide on a suitable training-test dataset and maintain a similar network architecture when making comparisons between the approaches.
+2D image deblurring with a known point-spread function seems the ideal problem for this approach. For $m$, we can take a set of 2D images from the real world or a benchmark dataset such as MNIST or Fashion-MNIST. For each image, apply a suitable $\Phi$, for example a Gaussian filter, to simulate the action of the PSF. Then optionally add noise to create the data, $d$. These steps are encapsulated by equation \ref{eqn:formulate_d}. Through this process we create the sequence of $\{m,d\}$ pairs. There are a number of methods to compare,
+\begin{enumerate}
+\item \label{item:tv} Reconstruction under a constraint (e.g.\ TV denoising); section \ref{sec:foundation}.
+\item Reconstruct through a representative training set under an L2 norm; section \ref{sec:bayes_training}.
+\item Reconstruction through $g_{\theta}$; section \ref{sec:learned}.
+\item Reconstruction through a learned latent space; section \ref{sec:vae_prior}.
+\item \label{item:dnu} Reconstruction through network unrolling; section \ref{sec:unrolling}.
+\end{enumerate}
+We want to compare the performance of \ref{item:tv} to \ref{item:dnu} under the conditions,
+\begin{itemize}
+\item $\Phi$ is changed but the test set is chosen from a similar distribution as the training set.
+\item $\Phi$ is same but the distribution is different.
+\end{itemize}
+The difficulty with 2D images is that whilst large test datasets exist they are not easy to generate and finding sufficient numbers of real world examples is hard. Steps \ref{item:tv} to \ref{item:dnu}  are also computationally slower in the 2D test, and given limited computing resources this hinders progress.
+
+An alternative is to use noisy time series instead of images. This provides a path to rapidly generating any number of different distributions for the model space. For example, we can,
+\begin{enumerate}
+\item Start with steps and linear ramps. Ideal for a detrending constraint. 
+\item Add more complex functions (quadratics, exponentials, sinusoids).
+\item Generate time series via stochastic differential equations.
+\end{enumerate}
+Now we can readily generate test samples from radically different distributions to the training set and watch how performance changes between methods \ref{item:tv} to \ref{item:dnu}. 
+
+\begin{thebibliography}{9}
+\bibitem[ADMM10]{admm}
+ S. Boyd, N. Parikh, E. Chu, B. Peleato, and J. Eckstein (2010) ``Distributed Optimization and Statistical Leaning via the Alternating Direction Method of Multipliers", in \emph{Foundations and Trends in Machine Learning}, Vol 3, No. 1. \url{https://web.stanford.edu/~boyd/papers/pdf/admm_distr_stats.pdf}
+
+\bibitem[KigmaWelling19] {vae}[Kigma19] 
+D.P. Kingma, and M. Welling (2019) ``An Introduction to Variational Autoencoders", in \emph{Foundations and Trends in Machine Learning}, Vol. xx, No. xx.
+\url{https://arxiv.org/abs/1906.02691}
+
+\bibitem[Monga20]{monga} 
+V. Monga, Y. Lie and Y.C. Eldar (2020) ``Algorithm Unrolling: Interpretable, Efficient Deep Learning for Signal and Image Processing", in \emph{IEEE Signal Processing Magazine}, Vol. xx, No. xx. \url{https://arxiv.org/pdf/1912.10557}
+
+\bibitem[Tachella26] {tachella}
+J. Tachella, and M. Davies (2026) ``Self-supervized learning from Noisy and Incomplete Data", in \emph{Image and Video Processing}, Vol. xx, No. xx. \url{https://arxiv.org/abs/2601.03244}
+
+\bibitem[admmNet17] {admmnet}
+Y. Yang, J. Sun, H. Li, and Z. Xu (2017) ``ADMM-Net: A Deep Learning Approach for Compressive Sensing MRI", in \emph{Computer Vision and Pattern Recognition}, Vol. xx, No. xx. \url{https://arxiv.org/abs/1705.06869}
+
+\bibitem[LISTA10]{lista} 
+K. Gregor, and Y. LeCunn (2010) ``Learning Fast Approximations of Sparse Coding" in \emph{Proceedings of the 27th International Conference on Machine Learning}, Haifa Israel. \url{https://icml.cc/Conferences/2010/papers/449.pdf}
+
+\bibitem[Bora17]{bora}
+A. Bora, A. Jalal, E. Price, and A.G. Dimakis (2017) ``Compressed Sensing using Generative Models". \url{https://arxiv.org/pdf/1703.03208}
+\end{thebibliography}
+
+\end{document}
+# Review of "Machine Learning in Inverse Problems"
+
+The notes are well organized, and the central idea, comparing supervised, variational, and unrolled approaches, is clear. The main problems are in the variational derivations (Section 3), where several equations are wrong or internally inconsistent, and in notation that changes meaning between sections. Below are the most important issues first, then smaller ones.
+
+## Substantive correctness issues
+
+1. **Eq. 21 and the sentence after it are wrong.** The ELBO is L_d = log p(d) − KL[q(m|d) ‖ p(m|d)], which in your form is L_d = log p(d) + E_q[log(p(m′|d)/q(m′|d))]. It is not "p(d) × ∫ …". Consequently, "when L → 0, q → p(m|d)" is incorrect. When q → p(m|d), the ELBO tends to log p(d), which is generally not zero. The KL gap goes to zero.
+
+2. **The training-loss derivation in 3.1 (Eqs. 27–29) doesn't hold together.**
+   - Eq. 28 ("log p(d|m) + log p(m) − L_d → q") has no clear meaning.
+   - Eq. 29 is not derived from anything. It simply adds −log q(m|d) to −L_d.
+   - What you actually have is a hybrid of two objectives: supervised conditional maximum likelihood (the ‖m − μ_θ‖² term) plus the negative ELBO, acting as a regularizer. Say this explicitly, because it is a different justification from the one currently given.
+   - In Eq. 31, the quadratic term uses identity covariance while the log-determinant uses σ_θ, which is inconsistent. The log|σ_θ| terms then cancel in Eq. 33 only because of this inconsistency. With the correct σ_θ⁻¹ weighting, Eq. 33 changes.
+
+3. **The linear-Gaussian model in 3.1 has a closed-form posterior.** With p(m) = N(μ_m, Σ_m) and p(d|m) = N(Φm, I), the exact posterior is Gaussian and gives a Tikhonov-type solution. The ELBO terms therefore push the network towards that Tikhonov solution, not towards the prior implied by the training data. The first term (supervised fit) and the ELBO terms compete. Also, fixing the noise covariance to I arbitrarily sets the balance between data fit and prior. This deserves discussion, since it affects the claim that Eq. 35 is "justified" by probability.
+
+4. **Sampling isn't needed for the data term.** Since Φ is linear, E‖d − Φm′‖² = ‖d − Φμ_θ‖² + tr(ΦᵀΦσ_θ) in closed form. The statement that sampling is "required to train σ_θ" is not quite right either, because σ_θ already appears in the trace term.
+
+5. **Section 2 overstates what the supervised loss recovers.** Minimizing ‖m − g_θ(d)‖² trains g_θ towards the posterior mean E[m|d] (MMSE), not the minimizer of Eq. 12 (the MAP estimate). These coincide only in special cases, such as a symmetric unimodal posterior. Also, if R is included it should be R(g_θ(d)), not R(m).
+
+6. **Eq. 46 assumes d and m are conditionally independent given z.** But d = Φm + ε, so d depends on m even given z. Under Eqs. 44–45 the model ignores the variance of m|z when predicting d. This is a modelling inconsistency that affects the claimed form of the ELBO and of the reconstruction problem (Eq. 54).
+
+7. **Eq. 61 (Laplace KL) has an error.** The KL from Laplace(μ, b) to Laplace(0, 1) gives −KL = log b − b·exp(−|μ|/b) − |μ| + 1. The exponent should be −|μ|/σ_ϕ, not −|μ|. With a scalar σ_ϕ and a k-dimensional latent, the log σ_ϕ and "+1" terms should also be multiplied by k.
+
+8. **Standard deviation versus variance is used inconsistently.**
+   - In 3.1, σ_θ is a covariance (see tr(Σ_m⁻¹σ_θ) and |Σ_m|/|σ_θ| in Eq. 26), yet in Eq. 34 it multiplies the standard-normal sample as a scale.
+   - In 3.2, σ_θ appears as ‖(d − Φμ_θ)/σ_θ‖², so it is a standard deviation. The accompanying log|σ_θ| should then be 2 log|σ_θ| inside the bracket (Eqs. 47–49, 54).
+   - The notation table calls σ "variance", while Eq. 11 uses it as a standard deviation.
+   - Similarly, Eq. 63's ‖z‖₁ should carry a factor 2 for the same normalization as ‖z‖² in Eq. 54.
+
+9. **Section 3.4 claims need softening.** Sparsity in z does not imply sparsity in m = μ_θ(z) for a nonlinear decoder. "Laplacian in m space" should be z space. Saying sparsity "is the meaning of 'compressive'" is inaccurate, since compressive sensing refers to measuring far fewer samples than the dimension. Requiring σ_ϕ to be a scalar is a choice, not a necessity.
+
+10. **Section 1.2: Φ's shape and the normal equations.** Since Φ maps m to d, its shape should be (|d|, |m|), not (|m|, |d|) as in the notation table. Also, in the underconstrained case you describe (|m| > |d|), ΦᵀΦ is always singular, so Eq. 3 never applies. "Ill-conditioned" and "has zero eigenvalues" (singular) are different things.
+
+## Smaller equation and typo issues
+
+- **Eq. 5:** The ½ factor is on the first term but not the second, so it is inconsistent with Eq. 6.
+- **Eq. 10 and Eq. 11:** The prior mean is zero, so m₀ = 0 for the Tikhonov equivalence. The scalar density normalization 1/(σ√2π) should be (σ√2π)^(−n) for vectors. The "log-likelihood" (above Eq. 12) is actually the log joint, and constants are dropped while "=" is used.
+- **Eqs. 17–19:** m′ ∼ m should be m′ ∼ p(m), q(d) should be q(m|d), and p(m) in Eq. 19 should be p(m′).
+- **Eq. 20:** There is no expectation or q-weighting in the integral.
+- **Eq. 34:** The ½ is dropped from the last term. The order in tr[WσWᵀ] and ‖W(·)‖² depends on whether Σ⁻¹ = WWᵀ or WᵀW. m′ is reused for the standard-normal noise.
+- **Eq. 35:** R(θ) is undefined, and it is really a penalty on the outputs μ_θ(d), not on the weights.
+- **Eq. 43/47:** The "+½" at the end of Eq. 47 should be k/2, where k is the latent dimension.
+- **Eq. 48:** The average over k samples should be (1/K)Σ, not just Σ. The reconstruction-to-KL weighting currently depends on K.
+- **Eq. 49 and the sentence after it:** "similarity to 14 and 65" should probably be 14 and 35, since 65 is the ADMM Lagrangian.
+- **Eq. 52:** Should be σ_θ, not µ_θ.
+- **Eq. 53:** "Find z which minimizes p(z|d)" should be maximizes.
+- **Eq. 70:** The term ξ[k] should be ξ[k]ᵀη, otherwise it drops out of the minimization.
+- **Eq. 75:** There is an extra closing parenthesis.
+- **Section 4 wording:** "Dual solution of Eq. 65" is better described as a saddle point of the augmented Lagrangian. The prox does not enforce R as a hard constraint, only penalizes it.
+
+## Notation and clarity
+
+- **Symbols reused with different meanings:** θ denotes different networks in 3.1 and 3.2. η and ξ denote latent-space encoder outputs in 3.2 and ADMM variables in Section 4. R is the regularizer in Eq. 12 and also appears in R(θ). k is undefined in Eq. 26.
+- **Section 4 leaves out the dual variable ξ.** After replacing the η-update with a network, and the m-update with Eqs. 74 or 75, ξ vanishes. Say so explicitly and state whether weights are shared across layers. This matters for the overfitting argument in Section 5. Also clarify whether the per-layer losses (Eq. 73) are trained greedily or end-to-end.
+- **Gaussian parameters:** Clarify throughout whether N(μ, σ) takes a variance, a standard deviation, or a covariance matrix.
+
+## Discussion, table, and testing
+
+- **Section 5, posterior collapse:** Section 3.1 has no latent variable, so posterior collapse (a VAE issue) applies to 3.2, not 3.1.
+- **Section 5, typo:** "similar to those used in testing" should be "training."
+- **Section 5 versus Table 1:** The text says posterior learning should perform about the same as fully supervised, yet the table gives them different marks in rows 2 and 3. The text also says overfitting appears when distributions differ, but row 3 marks posterior learning as good. The columns "Accurate sensing" and "Accurate prior" and the symbols ✓/×/×× need definitions.
+- **Section 5, "Φ⁻¹ defined by Eq. 66":** Eq. 66 involves (ΦᵀΦ + ρI)⁻¹, not Φ⁻¹ or the pseudo-inverse.
+- **Intro versus Section 5:** The introduction suggests unrolling reduces overfitting. Section 5 argues the opposite. Consider revising the introduction to match.
+- **Section 6:** Noise should not be optional for an inverse problem test. Specify which Φ the reconstruction methods use when Φ is changed. Beware of the "inverse crime" when the test data uses the same Φ as reconstruction. Include the baseline (same Φ, same distribution) and the both-changed case. Method 4 omits the sparse variant of 3.4. "Steps 1 to 5" should be "methods 1 to 5."
+
+## References
+
+Several entries need fixing: "Kigma" should be Kingma (and the label is doubled), "Y. Lie" should be Y. Li, "LeCunn" should be LeCun, and "Statistical Leaning" should be Learning. Volume and number placeholders ("xx") remain. I'd also double-check the venue given for ADMM-Net, as I believe the original conference version appeared at NIPS 2016.
+
+If it would help, I can write out a corrected derivation for Section 3.1 (Eqs. 19–35), since that is where the issues are most tangled.
